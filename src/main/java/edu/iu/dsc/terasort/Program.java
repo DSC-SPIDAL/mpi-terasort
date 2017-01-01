@@ -25,6 +25,8 @@ public class Program {
   private int rank;
   private int worldSize;
   private Intracomm partitionCom;
+  // local rank in the node
+  private int localRank;
 
   public Program(String []args) {
     readProgramArgs(args);
@@ -33,6 +35,7 @@ public class Program {
   public static void main(String[] args) {
     try {
       MPI.Init(args);
+
       // execute the program
       Program program = new Program(args);
       int rank = MPI.COMM_WORLD.getRank();
@@ -81,10 +84,11 @@ public class Program {
   public void execute() throws MPIException {
     rank = MPI.COMM_WORLD.getRank();
     worldSize = MPI.COMM_WORLD.getSize();
-
+    localRank = Integer.parseInt(System.getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
+    LOG.info("Local rank: " + localRank);
     MergeSorter sorter = new MergeSorter(worldSize);
 
-    String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(rank)).toString();
+    String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank)).toString();
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
     DataLoader loader = new DataLoader(inputFile, outputFile);
     List<Record> records = loader.load();
