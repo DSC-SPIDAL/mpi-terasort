@@ -82,7 +82,7 @@ public class Program {
     rank = MPI.COMM_WORLD.getRank();
     worldSize = MPI.COMM_WORLD.getSize();
 
-    MergeSorter sorter = new MergeSorter();
+    MergeSorter sorter = new MergeSorter(worldSize);
 
     String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(rank)).toString();
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
@@ -152,7 +152,7 @@ public class Program {
     }
 
     // now sort the data
-    List<Record> sortedRecords = sorter.sort();
+    Record[] sortedRecords = sorter.sort();
     loader.save(sortedRecords);
   }
 

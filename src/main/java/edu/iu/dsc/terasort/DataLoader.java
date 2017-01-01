@@ -55,12 +55,12 @@ public class DataLoader {
     }
   }
 
-  public void save(List<Record> records) {
+  public void save(Record[] records) {
     DataOutputStream os;
     try {
       os = new DataOutputStream(new FileOutputStream(outFileName));
-      for (int i = 0; i < records.size(); i++) {
-        Record r = records.get(i);
+      for (int i = 0; i < records.length; i++) {
+        Record r = records[i];
         os.write(r.getKey().getBytes(), 0, Record.KEY_SIZE);
         os.write(r.getText().getBytes(), 0, Record.DATA_SIZE);
       }
