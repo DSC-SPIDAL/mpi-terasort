@@ -26,7 +26,7 @@ public class DataLoader {
     this.outFileName = outFileName;
   }
 
-  public List<Record> load() {
+  public List<Record> load(int rank) {
     try {
       DataInputStream in = new DataInputStream(
           new BufferedInputStream(
@@ -50,7 +50,7 @@ public class DataLoader {
         records.add(new Record(key, value));
       }
     } catch (IOException e) {
-      LOG.log(Level.SEVERE, "Failed to read the file", e);
+      LOG.log(Level.SEVERE, "Failed to read the file: " + rank, e);
       throw new RuntimeException(e);
     }
   }

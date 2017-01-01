@@ -91,7 +91,7 @@ public class Program {
     String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank)).toString();
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
     DataLoader loader = new DataLoader(inputFile, outputFile);
-    List<Record> records = loader.load();
+    List<Record> records = loader.load(rank);
     LOG.info("Rank: " + rank + " Loaded records: " + records.size());
     PartitionTree partitionTree = buildPartitionTree(records);
 
