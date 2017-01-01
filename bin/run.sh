@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 jar=../target/mpi-stats-0.1-jar-with-dependencies.jar
-input=/home/supun/dev/projects/dsspidal/teragen/64/input
-output=/home/supun/dev/projects/dsspidal/teragen/64/output
+input=/scratch/skamburu/terasort/input/
+output=/scratch/skamburu/terasort/output/
 partitionSampleNodes=4
 partitionSamplesPerNode=100000
 filePrefix=part
