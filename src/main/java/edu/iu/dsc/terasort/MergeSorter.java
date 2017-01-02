@@ -2,7 +2,9 @@ package edu.iu.dsc.terasort;
 
 import org.apache.hadoop.io.Text;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -10,6 +12,8 @@ public class MergeSorter {
   private static Logger LOG = Logger.getLogger(MergeSorter.class.getName());
 
   private Record[][] records;
+
+  private List<Record[]> recordsList = new ArrayList<>();
 
   private static byte[] zero = new byte[Record.KEY_SIZE];
   private static byte[] largest = new byte[Record.KEY_SIZE];
@@ -33,8 +37,35 @@ public class MergeSorter {
     records[rank] = r;
   }
 
+  public void addDataNonSorted(int rank, byte[] data) {
+    LOG.log(Level.INFO, "Rank: " + rank + " receiving: " + data.length);
+    // for now lets get the keys and sort them
+    int size = data.length / Record.RECORD_LENGTH;
+    Record[] r = new Record[size];
+    for (int i = 0; i < size; i++) {
+      byte[] key = new byte[Record.KEY_SIZE];
+      byte[] text = new byte[Record.DATA_SIZE];
+      System.arraycopy(data, i * Record.RECORD_LENGTH, key, 0, Record.KEY_SIZE);
+      System.arraycopy(data, i * Record.RECORD_LENGTH + Record.KEY_SIZE, text, 0, Record.DATA_SIZE);
+      r[i] = new Record(new Text(key), new Text(text));
+    }
+
+    // sort the list and add
+    Arrays.sort(r);
+
+    recordsList.add(r);
+  }
+
   public Record[] sort() {
-    return merge(records, size);
+    if (recordsList.size() == 0) {
+      return merge(records, size);
+    } else {
+      Record[][] toSort = new Record[recordsList.size()][];
+      for (int i = 0; i < recordsList.size(); i++) {
+        toSort[i] = recordsList.get(i);
+      }
+      return merge(toSort, toSort.length);
+    }
   }
 
   // Every Node will store the data and the list no from which it belongs
@@ -144,18 +175,5 @@ public class MergeSorter {
       Heap[pos / 2] = y;
       pos = pos / 2; // make pos to its parent for next iteration.
     }
-  }
-
-  public static void main(String[] args) {
-    // TODO Auto-generated method stub
-    int[][] A = new int[5][];
-    A[0] = new int[] { 1, 5, 8, 9 };
-    A[1] = new int[] { 2, 3, 7, 10,11,13 };
-    A[2] = new int[] { 4, 6, 11,14, 15 };
-    A[3] = new int[] { 9, 14, 16,19, 19 };
-    A[4] = new int[] { 2, 4, 6, 9 };
-//    MergeSorter m = new MergeSorter(A.length);
-    //int[] op = m.merge(A, A.length);
-//    System.out.println(Arrays.toString(op));
   }
 }

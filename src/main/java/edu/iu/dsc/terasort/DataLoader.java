@@ -1,5 +1,6 @@
 package edu.iu.dsc.terasort;
 
+import org.apache.hadoop.hdfs.server.datanode.ReplicaUnderRecovery;
 import org.apache.hadoop.io.Text;
 
 import java.io.*;
@@ -48,6 +49,38 @@ public class DataLoader {
         key.set(buffer, 0, Record.KEY_SIZE);
         value.set(buffer, Record.KEY_SIZE, Record.DATA_SIZE);
         records.add(new Record(key, value));
+      }
+    } catch (IOException e) {
+      LOG.log(Level.SEVERE, "Failed to read the file: " + rank, e);
+      throw new RuntimeException(e);
+    }
+  }
+
+  public byte[] loadArray(int rank) {
+    try {
+      long fileSize = new File(inFileName).length();
+      DataInputStream in = new DataInputStream(
+          new BufferedInputStream(
+              new FileInputStream(new File(inFileName))));
+      if (fileSize > Integer.MAX_VALUE) {
+        throw new RuntimeException("Failed to load file because of size > " + Integer.MAX_VALUE);
+      }
+      int size = (int) fileSize;
+
+      byte[] content = new byte[size];
+      while (true) {
+        int read = 0;
+        while (read < size) {
+          long newRead = in.read(content, read, size - read);
+          if (newRead == -1) {
+            if (read == 0) {
+              return content;
+            } else {
+              throw new EOFException("read past eof");
+            }
+          }
+          read += newRead;
+        }
       }
     } catch (IOException e) {
       LOG.log(Level.SEVERE, "Failed to read the file: " + rank, e);
