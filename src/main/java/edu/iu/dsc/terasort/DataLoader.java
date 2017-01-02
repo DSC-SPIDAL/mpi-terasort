@@ -68,20 +68,16 @@ public class DataLoader {
       int size = (int) fileSize;
 
       byte[] content = new byte[size];
-      while (true) {
-        int read = 0;
-        while (read < size) {
-          long newRead = in.read(content, read, size - read);
-          if (newRead == -1) {
-            if (read == 0) {
-              return content;
-            } else {
-              throw new EOFException("read past eof");
-            }
-          }
-          read += newRead;
+      int read = 0;
+      while (read < size) {
+        long newRead = in.read(content, read, size - read);
+        if (newRead == -1) {
+          throw new EOFException("read past eof");
         }
+        read += newRead;
       }
+      LOG.info("Rank: " + rank + " Read amount: " + read);
+      return content;
     } catch (IOException e) {
       LOG.log(Level.SEVERE, "Failed to read the file: " + rank, e);
       throw new RuntimeException(e);
