@@ -177,11 +177,9 @@ public class Program2 {
         }
         round++;
       }
-      if (i == rank) {
-        Record[] sortedRecords = sorter.sort();
-        loader.save(sortedRecords);
-      }
     }
+    Record[] sortedRecords = sorter.sort();
+    loader.save(sortedRecords);
   }
 
 
