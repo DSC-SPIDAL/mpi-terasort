@@ -125,7 +125,7 @@ public class Program2 {
 
       Record r = new Record(new Text(keyBuffer));
       int partition = partitionTree.getPartition(r.getKey());
-      partitionedRecords.get(partition).add(partition);
+      partitionedRecords.get(partition).add(i);
     }
 
     // go through each partition
