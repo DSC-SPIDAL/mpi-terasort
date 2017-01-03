@@ -79,7 +79,7 @@ public class Program {
     worldSize = MPI.COMM_WORLD.getSize();
     localRank = Integer.parseInt(System.getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
     LOG.info("Local rank: " + localRank);
-    MergeSorter sorter = new MergeSorter();
+    MergeSorter sorter = new MergeSorter(rank);
 
     String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank)).toString();
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();

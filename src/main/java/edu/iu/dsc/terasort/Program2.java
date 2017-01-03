@@ -82,7 +82,7 @@ public class Program2 {
     worldSize = MPI.COMM_WORLD.getSize();
     localRank = Integer.parseInt(System.getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
     LOG.info("Local rank: " + localRank);
-    MergeSorter sorter = new MergeSorter();
+    MergeSorter sorter = new MergeSorter(rank);
 
     // create the partitioned record list
     Map<Integer, List<Integer>> partitionedRecords = new HashMap<Integer, List<Integer>>();

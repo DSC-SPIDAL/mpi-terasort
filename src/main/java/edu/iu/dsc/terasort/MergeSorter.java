@@ -39,6 +39,7 @@ public class MergeSorter {
   }
 
   public void addData(ByteBuffer data, int size) {
+    LOG.info(String.format("Rank: %d added data of size %d: ", rank, size));
     // for now lets get the keys and sort them
     int records = size / Record.RECORD_LENGTH;
     Record[] r = new Record[records];
@@ -60,13 +61,13 @@ public class MergeSorter {
       Record[][] toSort = new Record[recordsList.size()][];
       for (int i = 0; i < recordsList.size(); i++) {
         // sort the list and add
-        LOG.info("Start sorting");
         Record[] r = recordsList.get(i);
+        LOG.info(String.format("Rank: %d star sorting array of size %d", rank, r.length));
         Arrays.sort(r);
         toSort[i] = r;
-        LOG.info("Done sorting");
+        LOG.info(String.format("Rank: %d stop sorting", rank));
       }
-      LOG.info("Start merging");
+      LOG.info(String.format("Rank: %d start merging number of arrays: %d", rank, toSort.length));
       Record[] merge = merge(toSort, toSort.length);
       LOG.info("Done merging");
       return merge;
@@ -88,9 +89,10 @@ public class MergeSorter {
   public HeapNode[] Heap;
   public int position;
   Record[] result;
+  private int rank;
 
-  public MergeSorter() {
-
+  public MergeSorter(int rank) {
+    this.rank = rank;
   }
 
   public Record[] merge(Record[][] A, int k) {
