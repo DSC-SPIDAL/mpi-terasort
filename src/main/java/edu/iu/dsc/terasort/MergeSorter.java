@@ -27,9 +27,9 @@ public class MergeSorter {
     // for now lets get the keys and sort them
     int size = data.length / Record.RECORD_LENGTH;
     Record[] r = new Record[size];
+    byte[] key = new byte[Record.KEY_SIZE];
+    byte[] text = new byte[Record.DATA_SIZE];
     for (int i = 0; i < size; i++) {
-      byte[] key = new byte[Record.KEY_SIZE];
-      byte[] text = new byte[Record.DATA_SIZE];
       System.arraycopy(data, i * Record.RECORD_LENGTH, key, 0, Record.KEY_SIZE);
       System.arraycopy(data, i * Record.RECORD_LENGTH + Record.KEY_SIZE, text, 0, Record.DATA_SIZE);
       r[i] = new Record(new Text(key), new Text(text));
@@ -42,9 +42,9 @@ public class MergeSorter {
     // for now lets get the keys and sort them
     int size = data.length / Record.RECORD_LENGTH;
     Record[] r = new Record[size];
+    byte[] key = new byte[Record.KEY_SIZE];
+    byte[] text = new byte[Record.DATA_SIZE];
     for (int i = 0; i < size; i++) {
-      byte[] key = new byte[Record.KEY_SIZE];
-      byte[] text = new byte[Record.DATA_SIZE];
       System.arraycopy(data, i * Record.RECORD_LENGTH, key, 0, Record.KEY_SIZE);
       System.arraycopy(data, i * Record.RECORD_LENGTH + Record.KEY_SIZE, text, 0, Record.DATA_SIZE);
       r[i] = new Record(new Text(key), new Text(text));

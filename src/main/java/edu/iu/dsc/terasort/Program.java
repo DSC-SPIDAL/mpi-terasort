@@ -25,6 +25,7 @@ public class Program {
   private int rank;
   private int worldSize;
   private Intracomm partitionCom;
+  private int sendBufferSize;
   // local rank in the node
   private int localRank;
 
@@ -52,6 +53,7 @@ public class Program {
     options.addOption("output", true, "Output directory");
     options.addOption("partitionSampleNodes", true, "Number of nodes to choose partition samples");
     options.addOption("partitionSamplesPerNode", true, "Number of samples to choose from each node");
+    options.addOption("sendBufferSize", true, "Send buffer size for shuffling");
     options.addOption("filePrefix", true, "Prefix of the file partition");
 
     CommandLineParser commandLineParser = new GnuParser();
@@ -62,6 +64,7 @@ public class Program {
       outputFolder = cmd.getOptionValue("output");
       partitionSampleNodes = Integer.parseInt(cmd.getOptionValue("partitionSampleNodes"));
       partitionSamplesPerNode = Integer.parseInt(cmd.getOptionValue("partitionSamplesPerNode"));
+      sendBufferSize = Integer.parseInt(cmd.getOptionValue("sendBufferSize"));
       filePrefix = cmd.getOptionValue("filePrefix");
     } catch (ParseException e) {
       LOG.log(Level.SEVERE, "Failed to read the options", e);

@@ -3,12 +3,12 @@ package edu.iu.dsc.terasort;
 import mpi.Intracomm;
 import mpi.MPI;
 import mpi.MPIException;
-import mpi.Status;
 import org.apache.commons.cli.*;
 import org.apache.hadoop.io.Text;
+import org.apache.zookeeper.KeeperException;
 
 import java.nio.file.Paths;
-import java.util.Arrays;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -21,7 +21,8 @@ public class Program2 {
 
   private int partitionSampleNodes;
   private int partitionSamplesPerNode;
-  private int sendBufferSize;
+  private int maxSendRecords;
+  private int maxSendRecordsBytes;
 
   private int rank;
   private int worldSize;
@@ -36,10 +37,28 @@ public class Program2 {
   public static void main(String[] args) {
     try {
       MPI.Init(args);
-
+      int rank = MPI.COMM_WORLD.getRank();
+      int worldSize = MPI.COMM_WORLD.getSize();
+      int[] send = new int[rank];
+      for (int i = 0; i < rank; i++) {
+        send[i] = i;
+      }
+      int[] recv = new int[10];
+      int[] sizes = new int[]{0, 1, 2, 3};
+      int[] disla = new int[]{0, 0, 1, 3};
+      // MPI.COMM_WORLD.gatherv(send, rank, MPI.INT, recv, sizes, disla, MPI.INT, 0);
+      String s = "";
+      if (rank == 0) {
+        for (int i : recv) {
+          s += i;
+        }
+        System.out.println("s: " + s);
+      }
+      System.out.println("Done gathering");
       // execute the program
       Program2 program = new Program2(args);
       program.partialSendExecute();
+
 
       MPI.Finalize();
     } catch (MPIException e) {
@@ -65,7 +84,8 @@ public class Program2 {
       partitionSampleNodes = Integer.parseInt(cmd.getOptionValue("partitionSampleNodes"));
       partitionSamplesPerNode = Integer.parseInt(cmd.getOptionValue("partitionSamplesPerNode"));
       filePrefix = cmd.getOptionValue("filePrefix");
-      sendBufferSize = Integer.parseInt(cmd.getOptionValue("sendBufferSize"));
+      maxSendRecords = Integer.parseInt(cmd.getOptionValue("sendBufferSize"));
+      maxSendRecordsBytes = maxSendRecords * Record.RECORD_LENGTH;
     } catch (ParseException e) {
       LOG.log(Level.SEVERE, "Failed to read the options", e);
       HelpFormatter formatter = new HelpFormatter();
@@ -81,6 +101,12 @@ public class Program2 {
     LOG.info("Local rank: " + localRank);
     MergeSorter sorter = new MergeSorter(worldSize);
 
+    // create the partitioned record list
+    Map<Integer, List<Integer>> partitionedRecords = new HashMap<Integer, List<Integer>>();
+    for (int i = 0; i < worldSize; i++) {
+      partitionedRecords.put(i, new ArrayList<>());
+    }
+
     String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank)).toString();
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
     DataLoader loader = new DataLoader(inputFile, outputFile);
@@ -90,136 +116,85 @@ public class Program2 {
     PartitionTree partitionTree = buildPartitionTree(records);
     MPI.COMM_WORLD.barrier();
 
-    Thread t = new Thread(new ReceiveWorker(sorter, worldSize, sendBufferSize));
-    t.start();
-
-    // we are going to use pre-allocated worldSize buffers to send the correct values
-    byte[][] sendBuffers = new byte[worldSize][];
-    for (int i = 0; i < sendBuffers.length; i++) {
-      sendBuffers[i] = new byte[sendBufferSize * Record.RECORD_LENGTH];
-    }
-
     // number of records in each buffer
-    int[] sendBufferSizes = new int[worldSize];
-    Arrays.fill(sendBufferSizes, 0);
     byte[] keyBuffer = new byte[Record.KEY_SIZE];
-
     // now go through the partitions and add them to correct sendbuffer
     for (int i = 0; i < numberOfRecords; i++) {
       System.arraycopy(records, i * Record.RECORD_LENGTH, keyBuffer, 0, Record.KEY_SIZE);
 
       Record r = new Record(new Text(keyBuffer));
       int partition = partitionTree.getPartition(r.getKey());
-
-      byte []data = sendBuffers[partition];
-      // now copy the content to the buffer
-      System.arraycopy(records, i * Record.RECORD_LENGTH, data,
-          sendBufferSizes[partition] * Record.RECORD_LENGTH, Record.RECORD_LENGTH);
-      sendBufferSizes[partition] += 1;
-
-      // now get the send buffer
-      if (sendBufferSizes[partition] == sendBufferSize) {
-        sendBuffer(sorter, sendBufferSizes[partition] * Record.RECORD_LENGTH, partition, data);
-        sendBuffers[partition] = new byte[sendBufferSize * Record.RECORD_LENGTH];
-        sendBufferSizes[partition] = 0;
-      }
+      partitionedRecords.get(partition).add(partition);
     }
 
-    LOG.info("Last items to send rank: " + rank);
 
-    // at the end send what is left
+    // go through each partition
     for (int i = 0; i < worldSize; i++) {
-      if (sendBufferSizes[i] != 0) {
-        byte []data = sendBuffers[i];
-        sendBuffer(sorter, sendBufferSizes[i] * Record.RECORD_LENGTH, i, data);
-        sendBuffers[i] = new byte[sendBufferSize * Record.RECORD_LENGTH];
-      }
-    }
-
-    LOG.info("Sending 0: " + rank);
-    // send 0 to mark the end
-    for (int i = 0; i < worldSize; i++) {
-      if (i != rank) {
-        int[] sizeBuffer = new int[1];
-        sizeBuffer[0] = 0;
-        MPI.COMM_WORLD.send(sizeBuffer, 1, MPI.INT, i, 100);
-      }
-    }
-
-    try {
-      t.join();
-    } catch (InterruptedException e) {}
-
-    // now sort the data
-//    Record[] sortedRecords = sorter.sort();
-//    loader.save(sortedRecords);
-    MPI.COMM_WORLD.barrier();
-  }
-
-  private void sendBuffer(MergeSorter sorter, int size,
-                          int sendRank, byte[] data) throws MPIException {
-    int[] sizeBuffer = new int[1];
-    if (sendRank != rank) {
-      sizeBuffer[0] = size;
-//      LOG.info("Sending size: " + sizeBuffer[0] + " to partition: " + partition + " from: " + rank);
-      MPI.COMM_WORLD.send(sizeBuffer, 1, MPI.INT, sendRank, 100);
-      // it is time to send this buffer
-      LOG.info("Sending actual data of size: " + size + " sink: " + sendRank + " source: " + rank);
-      MPI.COMM_WORLD.send(data, size, MPI.BYTE, sendRank, 100);
-    } else {
-      sorter.addData(rank, data);
-    }
-  }
-
-  private class ReceiveWorker implements Runnable {
-    private MergeSorter sorter;
-
-    private int finishedSenders;
-
-    public ReceiveWorker(MergeSorter sorter, int worldSize, int bufferSize) {
-      this.sorter = sorter;
-      this.finishedSenders = worldSize - 1;
-    }
-
-    @Override
-    public void run() {
-      while (true) {
-        if (finishedSenders == 0) {
-          break;
+      // now lets go through each partition and do a gather
+      // first lest send the expected amounts to each process
+      int[] expectedAmountSendBuffer = new int[1];
+      // we pre-allocate this buffer as this is the max amount we are going to send at each time
+      int[] expectedAmountReceiveBuffer = new int[worldSize];
+      expectedAmountSendBuffer[0] = partitionedRecords.get(i).size() * Record.RECORD_LENGTH;
+      MPI.COMM_WORLD.allGather(expectedAmountSendBuffer, 1, MPI.INT, expectedAmountReceiveBuffer, 1, MPI.INT);
+      if (i == rank) {
+        String s = "";
+        for (int j = 0; j < worldSize; j++) {
+          s = s + expectedAmountReceiveBuffer[j] + " ";
         }
+        LOG.info("Rank: " + rank + "Expecting: " + s);
+      }
 
-        for (int source = 0; source < worldSize; source++) {
-          if (source == rank) {
-            continue;
+      int round = 0;
+
+      // now do several gathers to gather all the data from the buffers
+      while (true) {
+        int totalSize = 0;
+        String s = "";
+        String s2 = "";
+        int[] receiveSizes = new int[worldSize];
+        int[] displacements = new int[worldSize];
+        displacements[0] = 0;
+        for (int j = 0; j < worldSize; j++) {
+          receiveSizes[j] = expectedAmountReceiveBuffer[j] > round * maxSendRecordsBytes + maxSendRecordsBytes ? maxSendRecordsBytes :
+              expectedAmountReceiveBuffer[j] - round * maxSendRecordsBytes;
+          if (receiveSizes[j] < 0) receiveSizes[j] = 0;
+          s = s + receiveSizes[j] + " ";
+          totalSize += receiveSizes[j];
+          if (j > 0) {
+            displacements[j] = displacements[j - 1] + receiveSizes[j - 1];
+          }
+          s2 = s2 + displacements[j] + " ";
+        }
+        // if (receiveSizes[0] != maxSendRecordsBytes) break;
+        LOG.info("Rank: " + rank + "Receive sizes: " + s);
+        LOG.info("Rank: " + rank + "Displacement sizes: " + s2);
+
+        if (totalSize > 0) {
+          // copy the data
+          byte[] sendBuffer = new byte[receiveSizes[rank]];
+          List<Integer> partitionedKeys = partitionedRecords.get(i);
+          for (int j = 0; j < receiveSizes[rank] / Record.RECORD_LENGTH; j++) {
+            int k = round * maxSendRecords + j;
+            int recordPosition = partitionedKeys.get(k);
+            System.arraycopy(records, recordPosition * Record.RECORD_LENGTH, sendBuffer, j * Record.RECORD_LENGTH, Record.RECORD_LENGTH);
           }
 
+          byte []recv = new byte[totalSize];
+          LOG.info("Gather source: " + i + " total: " + totalSize + " this proc: " + rank + " send size: " + receiveSizes[rank]);
           try {
-            Status status = MPI.COMM_WORLD.iProbe(source, 100);
-            if (status == null) {
-              continue;
-            }
-            int size = status.getCount(MPI.INT);
-            if (size != 1) {
-              throw new RuntimeException("Unexpected value, expecting 1 received: " + size);
-            }
-
-            int[] sizeBuffer = new int[1];
-            MPI.COMM_WORLD.recv(sizeBuffer, 1, MPI.INT, source, 100);
-            if (sizeBuffer[0] == 0) {
-              LOG.info("Rank: " + source + " Finished sending");
-              finishedSenders--;
-            }
-
-            byte []data = new byte[sizeBuffer[0]];
-            MPI.COMM_WORLD.recv(data, sizeBuffer[0], MPI.BYTE, source, 100);
-            LOG.info("Receved: " + sizeBuffer[0] + " rank: " + rank + " from: " + source);
-            // sorter.addDataNonSorted(source, data);
-          } catch (MPIException e) {
-            LOG.log(Level.SEVERE, "MPI Exception", e);
+             MPI.COMM_WORLD.gatherv(sendBuffer, receiveSizes[rank], MPI.BYTE, recv, receiveSizes, displacements, MPI.BYTE, i);
+          } catch (ArrayIndexOutOfBoundsException e) {
+            LOG.log(Level.INFO, "Rank: " + rank, e);
             throw new RuntimeException(e);
           }
+        } else {
+          LOG.info("Rank: " + rank + " done");
+          break;
         }
+        round++;
       }
+      LOG.info("Rank: " + rank + " done done");
     }
   }
 
