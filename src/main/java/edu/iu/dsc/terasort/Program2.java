@@ -38,24 +38,6 @@ public class Program2 {
   public static void main(String[] args) {
     try {
       MPI.Init(args);
-      int rank = MPI.COMM_WORLD.getRank();
-      int worldSize = MPI.COMM_WORLD.getSize();
-      int[] send = new int[rank + 1];
-      for (int i = 0; i < rank; i++) {
-        send[i] = i;
-      }
-      int[] recv = new int[10];
-      int[] sizes = new int[]{0, 1, 2, 3};
-      int[] disla = new int[]{0, 0, 1, 3};
-      MPI.COMM_WORLD.gatherv(send, rank, MPI.INT, recv, sizes, disla, MPI.INT, 0);
-      String s = "";
-      if (rank == 0) {
-        for (int i : recv) {
-          s += i;
-        }
-        System.out.println("s: " + s);
-      }
-      System.out.println("Done gathering");
       // execute the program
       Program2 program = new Program2(args);
       program.partialSendExecute();
