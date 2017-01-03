@@ -50,22 +50,23 @@ public class MergeSorter {
       data.get(text, 0, Record.DATA_SIZE);
       r[i] = new Record(new Text(key), new Text(text));
     }
-    // sort the list and add
-    LOG.info("Start sorting");
-    Arrays.sort(r);
     recordsList.add(r);
-    LOG.info("Done sorting");
   }
 
   public Record[] sort() {
     if (recordsList.size() == 0) {
       return merge(records, size);
     } else {
-      LOG.info("Start merging");
       Record[][] toSort = new Record[recordsList.size()][];
       for (int i = 0; i < recordsList.size(); i++) {
-        toSort[i] = recordsList.get(i);
+        // sort the list and add
+        LOG.info("Start sorting");
+        Record[] r = recordsList.get(i);
+        Arrays.sort(r);
+        toSort[i] = r;
+        LOG.info("Done sorting");
       }
+      LOG.info("Start merging");
       Record[] merge = merge(toSort, toSort.length);
       LOG.info("Done merging");
       return merge;
