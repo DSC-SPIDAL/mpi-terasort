@@ -6,6 +6,8 @@ import mpi.MPIException;
 import org.apache.commons.cli.*;
 import org.apache.hadoop.io.Text;
 
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.logging.Level;
@@ -98,7 +100,7 @@ public class Program2 {
     worldSize = MPI.COMM_WORLD.getSize();
     localRank = Integer.parseInt(System.getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
     LOG.info("Local rank: " + localRank);
-    MergeSorter sorter = new MergeSorter(worldSize);
+    MergeSorter sorter = new MergeSorter();
 
     // create the partitioned record list
     Map<Integer, List<Integer>> partitionedRecords = new HashMap<Integer, List<Integer>>();
@@ -126,89 +128,77 @@ public class Program2 {
       partitionedRecords.get(partition).add(partition);
     }
 
-
     // go through each partition
     for (int i = 0; i < worldSize; i++) {
       // now lets go through each partition and do a gather
       // first lest send the expected amounts to each process
       int[] expectedAmountSendBuffer = new int[1];
       // we pre-allocate this buffer as this is the max amount we are going to send at each time
-      int[] expectedAmountReceiveBuffer = new int[worldSize];
+      IntBuffer expectedAmountReceiveBuffer = MPI.newIntBuffer(worldSize);
       expectedAmountSendBuffer[0] = partitionedRecords.get(i).size() * Record.RECORD_LENGTH;
       MPI.COMM_WORLD.allGather(expectedAmountSendBuffer, 1, MPI.INT, expectedAmountReceiveBuffer, 1, MPI.INT);
-      if (i == rank) {
-        String s = "";
-        for (int j = 0; j < worldSize; j++) {
-          s = s + expectedAmountReceiveBuffer[j] + " ";
-        }
-        LOG.info("Rank: " + rank + "Expecting: " + s);
-      }
 
       int maxRounds = 0;
       for (int j = 0; j < worldSize; j++) {
-        int temp = new Double(Math.ceil((double)expectedAmountReceiveBuffer[j] / maxSendRecordsBytes)).intValue();
+        int temp = new Double(Math.ceil((double)expectedAmountReceiveBuffer.get(j) / maxSendRecordsBytes)).intValue();
         if (temp > maxRounds) {
           maxRounds = temp;
         }
       }
-      int round = maxRounds - 1;
-      LOG.info("Max rounds: " + maxRounds);
+
+      int round = 0;
       // now do several gathers to gather all the data from the buffers
-      while (round >= 0) {
+      while (round < maxRounds) {
         int totalSize = 0;
-        String s = "";
-        String s2 = "";
         int[] receiveSizes = new int[worldSize];
         int[] displacements = new int[worldSize];
         displacements[0] = 0;
         for (int j = 0; j < worldSize; j++) {
-          int temp = new Double(Math.ceil((double)expectedAmountReceiveBuffer[j] / (maxRounds * Record.RECORD_LENGTH))).intValue();
-          if (temp * (round + 1) > expectedAmountReceiveBuffer[j] / Record.RECORD_LENGTH) {
-            temp = expectedAmountReceiveBuffer[j] / Record.RECORD_LENGTH - temp * (round);
-            LOG.info("Rank: " + j + " adjusting round: " + temp);
+          int temp = new Double(Math.ceil((double)expectedAmountReceiveBuffer.get(j) / (maxRounds * Record.RECORD_LENGTH))).intValue();
+          if (temp * (round + 1) > expectedAmountReceiveBuffer.get(j) / Record.RECORD_LENGTH) {
+            temp = expectedAmountReceiveBuffer.get(j) / Record.RECORD_LENGTH - temp * (round);
           }
           receiveSizes[j] = temp * Record.RECORD_LENGTH;
-          s = s + receiveSizes[j] + " ";
           totalSize += receiveSizes[j];
           if (j > 0) {
             displacements[j] = displacements[j - 1] + receiveSizes[j - 1];
           }
-          s2 = s2 + displacements[j] + " ";
-        }
-        if (rank == i) {
-          LOG.info("Rank: " + rank + " round: " + round + " Receive sizes: " + s);
-          LOG.info("Rank: " + rank + " displacement sizes: " + s2);
         }
 
         // copy the data
-        byte[] sendBuffer = new byte[receiveSizes[rank]];
+        ByteBuffer sendBuffer = MPI.newByteBuffer(receiveSizes[rank]);
         List<Integer> partitionedKeys = partitionedRecords.get(i);
-        int sendSize = new Double(Math.ceil((double)expectedAmountReceiveBuffer[rank] / (maxRounds * Record.RECORD_LENGTH))).intValue();
-        int k = 0;
-        int j = 0;
-        int recordPosition = 0;
+        int sendSize = new Double(Math.ceil((double)expectedAmountReceiveBuffer.get(rank) / (maxRounds * Record.RECORD_LENGTH))).intValue();
         try {
-          for (j = 0; j < receiveSizes[rank] / Record.RECORD_LENGTH; j++) {
-            k = round * sendSize + j;
-            recordPosition = partitionedKeys.get(k);
-            System.arraycopy(records, recordPosition * Record.RECORD_LENGTH, sendBuffer, j * Record.RECORD_LENGTH, Record.RECORD_LENGTH);
+          for (int j = 0; j < receiveSizes[rank] / Record.RECORD_LENGTH; j++) {
+            int k = round * sendSize + j;
+            int recordPosition = partitionedKeys.get(k);
+            sendBuffer.put(records, recordPosition * Record.RECORD_LENGTH, Record.RECORD_LENGTH);
           }
         } catch (IndexOutOfBoundsException e) {
-          LOG.log(Level.INFO, "Rank: " + rank + " k: " + k + " recordPosition: " + recordPosition + " receiveSizes[rank]: " + receiveSizes[rank] / Record.RECORD_LENGTH + " sendSize: " + sendSize + " round: " + round + " j: " + j, e);
+//          LOG.log(Level.INFO, "Rank: " + rank + " k: " + k + " recordPosition: " + recordPosition + " receiveSizes[rank]: " + receiveSizes[rank] / Record.RECORD_LENGTH + " sendSize: " + sendSize + " round: " + round + " j: " + j, e);
           throw new RuntimeException(e);
         }
 
-        byte []recv = new byte[totalSize];
-          LOG.info("Gather source: " + i + " total: " + totalSize + " this proc: " + rank + " send size: " + receiveSizes[rank]);
+        ByteBuffer recvBuffer = null;
+        if (i == rank) {
+          recvBuffer = MPI.newByteBuffer(totalSize);
+        }
         try {
-           MPI.COMM_WORLD.gatherv(sendBuffer, receiveSizes[rank], MPI.BYTE, recv, receiveSizes, displacements, MPI.BYTE, i);
+          MPI.COMM_WORLD.gatherv(sendBuffer, receiveSizes[rank], MPI.BYTE, recvBuffer, receiveSizes, displacements, MPI.BYTE, i);
+          if (i == rank) {
+            sorter.addData(recvBuffer, totalSize);
+          }
         } catch (ArrayIndexOutOfBoundsException e) {
           LOG.log(Level.INFO, "Rank: " + rank, e);
           throw new RuntimeException(e);
         }
-        round--;
+        round++;
       }
-      LOG.info("Rank: " + rank + " done done");
+      if (i == rank) {
+        Record[] sortedRecords = sorter.sort();
+        loader.save(sortedRecords);
+      }
     }
   }
 
@@ -247,7 +237,7 @@ public class Program2 {
       t.set(selectedKeys, i * Record.KEY_SIZE, Record.KEY_SIZE);
 
       partitions[i] = t;
-      LOG.info("rank: " + rank + " Partition tree: " + t.toString());
+      // LOG.info("rank: " + rank + " Partition tree: " + t.toString());
     }
 
     PartitionTree.TrieNode root = PartitionTree.buildTrie(partitions, 0, partitions.length, new Text(), 2);

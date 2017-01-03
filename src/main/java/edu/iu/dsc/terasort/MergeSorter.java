@@ -2,6 +2,7 @@ package edu.iu.dsc.terasort;
 
 import org.apache.hadoop.io.Text;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -37,34 +38,37 @@ public class MergeSorter {
     records[rank] = r;
   }
 
-  public void addDataNonSorted(int rank, byte[] data) {
-    LOG.log(Level.INFO, "Rank: " + rank + " receiving: " + data.length);
+  public void addData(ByteBuffer data, int size) {
     // for now lets get the keys and sort them
-    int size = data.length / Record.RECORD_LENGTH;
-    Record[] r = new Record[size];
+    int records = size / Record.RECORD_LENGTH;
+    Record[] r = new Record[records];
     byte[] key = new byte[Record.KEY_SIZE];
     byte[] text = new byte[Record.DATA_SIZE];
-    for (int i = 0; i < size; i++) {
-      System.arraycopy(data, i * Record.RECORD_LENGTH, key, 0, Record.KEY_SIZE);
-      System.arraycopy(data, i * Record.RECORD_LENGTH + Record.KEY_SIZE, text, 0, Record.DATA_SIZE);
+    data.rewind();
+    for (int i = 0; i < records; i++) {
+      data.get(key, 0, Record.KEY_SIZE);
+      data.get(text, 0, Record.DATA_SIZE);
       r[i] = new Record(new Text(key), new Text(text));
     }
-
     // sort the list and add
+    LOG.info("Start sorting");
     Arrays.sort(r);
-
     recordsList.add(r);
+    LOG.info("Done sorting");
   }
 
   public Record[] sort() {
     if (recordsList.size() == 0) {
       return merge(records, size);
     } else {
+      LOG.info("Start merging");
       Record[][] toSort = new Record[recordsList.size()][];
       for (int i = 0; i < recordsList.size(); i++) {
         toSort[i] = recordsList.get(i);
       }
-      return merge(toSort, toSort.length);
+      Record[] merge = merge(toSort, toSort.length);
+      LOG.info("Done merging");
+      return merge;
     }
   }
 
@@ -84,15 +88,17 @@ public class MergeSorter {
   public int position;
   Record[] result;
 
-  public MergeSorter(int k) {
+  public MergeSorter() {
+
+  }
+
+  public Record[] merge(Record[][] A, int k) {
     records = new Record[k][];
     this.size = k;
     Heap = new HeapNode[k + 1]; // size + 1 because index 0 will be empty
     position = 0;
     Heap[0] = new HeapNode(new Record(new Text(zero)), -1); // put some junk values at 0th index node
-  }
 
-  public Record[] merge(Record[][] A, int k) {
     int nk = 0;
     for (int i = 0; i < A.length; i++) {
       nk += A[i].length;
