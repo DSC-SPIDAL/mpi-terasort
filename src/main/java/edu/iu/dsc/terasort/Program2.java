@@ -112,13 +112,16 @@ public class Program2 {
 
     ByteBuffer recvBuffer = MPI.newByteBuffer(maxSendRecordsBytes * worldSize);
     ByteBuffer sendBuffer = MPI.newByteBuffer(maxSendRecordsBytes);
+    IntBuffer expectedAmountSendBuffer = MPI.newIntBuffer(1);
+    IntBuffer expectedAmountReceiveBuffer = MPI.newIntBuffer(worldSize);
+    IntBuffer maxRoundsBuffer = MPI.newIntBuffer(1);
     // go through each partition
     for (int i = 0; i < worldSize; i++) {
       // now lets go through each partition and do a gather
       // first lest send the expected amounts to each process
-      IntBuffer expectedAmountSendBuffer = MPI.newIntBuffer(1);
       // we pre-allocate this buffer as this is the max amount we are going to send at each time
-      IntBuffer expectedAmountReceiveBuffer = MPI.newIntBuffer(worldSize);
+      expectedAmountSendBuffer.rewind();
+      expectedAmountReceiveBuffer.rewind();
       expectedAmountSendBuffer.put(partitionedRecords.get(i).size() * Record.RECORD_LENGTH);
       long allGatherStart = System.nanoTime();
       LOG.info(String.format("Rank: %d start gather", rank));
@@ -136,7 +139,7 @@ public class Program2 {
         }
       }
 
-      IntBuffer maxRoundsBuffer = MPI.newIntBuffer(1);
+      maxRoundsBuffer.rewind();
       maxRoundsBuffer.put(maxRounds);
       MPI.COMM_WORLD.bcast(maxRoundsBuffer, 1, MPI.INT, i);
       maxRoundsBuffer.rewind();
