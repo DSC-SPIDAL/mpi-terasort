@@ -111,6 +111,9 @@ public class Program2 {
       partitionedRecords.get(partition).add(i);
     }
 
+    int maxReceiveSize = 0;
+    ByteBuffer recvBuffer = MPI.newByteBuffer(maxSendRecordsBytes * worldSize);
+    ByteBuffer sendBuffer = MPI.newByteBuffer(maxSendRecordsBytes);
     // go through each partition
     for (int i = 0; i < worldSize; i++) {
       // now lets go through each partition and do a gather
@@ -132,6 +135,18 @@ public class Program2 {
         }
       }
 
+      maxReceiveSize = 0;
+      for (int j = 0; j < worldSize; j++) {
+        int temp = new Double(Math.ceil((double)expectedAmountReceiveBuffer.get(j) / (maxRounds * Record.RECORD_LENGTH))).intValue();
+        maxReceiveSize += temp * Record.RECORD_LENGTH;
+      }
+
+//      ByteBuffer recvBuffer = null;
+//      if (i == rank) {
+//        recvBuffer = MPI.newByteBuffer(maxReceiveSize);
+//      }
+//      ByteBuffer sendBuffer = MPI.newByteBuffer(maxSendRecordsBytes);
+
       int round = 0;
       // now do several gathers to gather all the data from the buffers
       while (round < maxRounds) {
@@ -151,8 +166,12 @@ public class Program2 {
           }
         }
 
+        if (maxReceiveSize < totalSize) {
+          throw new RuntimeException(String.format("%d < %d", maxSendRecordsBytes * maxRounds, totalSize));
+        }
+
         // copy the data
-        ByteBuffer sendBuffer = MPI.newByteBuffer(receiveSizes[rank]);
+        sendBuffer.rewind();
         List<Integer> partitionedKeys = partitionedRecords.get(i);
         int sendSize = new Double(Math.ceil((double)expectedAmountReceiveBuffer.get(rank) / (maxRounds * Record.RECORD_LENGTH))).intValue();
         try {
@@ -162,16 +181,14 @@ public class Program2 {
             sendBuffer.put(records, recordPosition * Record.RECORD_LENGTH, Record.RECORD_LENGTH);
           }
         } catch (IndexOutOfBoundsException e) {
-//          LOG.log(Level.INFO, "Rank: " + rank + " k: " + k + " recordPosition: " + recordPosition + " receiveSizes[rank]: " + receiveSizes[rank] / Record.RECORD_LENGTH + " sendSize: " + sendSize + " round: " + round + " j: " + j, e);
           throw new RuntimeException(e);
         }
 
-        ByteBuffer recvBuffer = null;
-        if (i == rank) {
-          recvBuffer = MPI.newByteBuffer(totalSize);
-        }
         try {
           allGatherStart = System.nanoTime();
+          if (recvBuffer != null) {
+            recvBuffer.rewind();
+          }
           MPI.COMM_WORLD.gatherv(sendBuffer, receiveSizes[rank], MPI.BYTE, recvBuffer, receiveSizes, displacements, MPI.BYTE, i);
           if (i == rank) {
             elapsedMillis = ((double)System.nanoTime() - allGatherStart) / 1000000.0;
