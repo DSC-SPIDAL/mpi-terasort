@@ -124,10 +124,10 @@ public class Program2 {
       expectedAmountReceiveBuffer.rewind();
       expectedAmountSendBuffer.put(partitionedRecords.get(i).size() * Record.RECORD_LENGTH);
       long allGatherStart = System.nanoTime();
-      LOG.info(String.format("Rank: %d start gather", rank));
+      // LOG.info(String.format("Rank: %d start gather", rank));
       MPI.COMM_WORLD.gather(expectedAmountSendBuffer, 1, MPI.INT, expectedAmountReceiveBuffer, 1, MPI.INT, i);
       double elapsedMillis = ((double)System.nanoTime() - allGatherStart) / 1000000.0;
-      LOG.info(String.format("Rank: %d gather time: %f", rank, elapsedMillis));
+      // LOG.info(String.format("Rank: %d gather time: %f", rank, elapsedMillis));
 
       int maxRounds = 0;
       if (rank == i) {

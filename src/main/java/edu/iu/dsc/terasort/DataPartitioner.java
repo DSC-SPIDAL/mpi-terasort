@@ -88,7 +88,7 @@ public class DataPartitioner {
         for (int i = 0; i < noOfSelectedKeys; i++) {
 //          System.arraycopy(partitionRecords[(i + 1) * div].getKey().getBytes(), 0,
 //              selectedKeys, i * Record.KEY_SIZE, Record.KEY_SIZE);
-          selectedKeys.put(partitionRecords[(i + 1) * div].getKey().getBytes());
+          selectedKeys.put(partitionRecords[(i + 1) * div].getKey().getBytes(), 0, Record.KEY_SIZE);
         }
       }
     }
