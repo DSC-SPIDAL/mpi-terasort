@@ -4,6 +4,7 @@ import mpi.Intracomm;
 import mpi.MPI;
 import mpi.MPIException;
 import org.apache.commons.cli.*;
+import org.apache.commons.math3.linear.SymmLQ;
 import org.apache.hadoop.io.Text;
 
 import java.nio.ByteBuffer;
@@ -114,11 +115,14 @@ public class Program2 {
     for (int i = 0; i < worldSize; i++) {
       // now lets go through each partition and do a gather
       // first lest send the expected amounts to each process
-      int[] expectedAmountSendBuffer = new int[1];
+      IntBuffer expectedAmountSendBuffer = MPI.newIntBuffer(1);
       // we pre-allocate this buffer as this is the max amount we are going to send at each time
       IntBuffer expectedAmountReceiveBuffer = MPI.newIntBuffer(worldSize);
-      expectedAmountSendBuffer[0] = partitionedRecords.get(i).size() * Record.RECORD_LENGTH;
+      expectedAmountSendBuffer.put(partitionedRecords.get(i).size() * Record.RECORD_LENGTH);
+      long allGatherStart = System.nanoTime();
       MPI.COMM_WORLD.allGather(expectedAmountSendBuffer, 1, MPI.INT, expectedAmountReceiveBuffer, 1, MPI.INT);
+      double elapsedMillis = ((double)System.nanoTime() - allGatherStart) / 1000000.0;
+      LOG.info(String.format("Rank: %d allgather time: %f", rank, elapsedMillis));
 
       int maxRounds = 0;
       for (int j = 0; j < worldSize; j++) {
@@ -167,8 +171,11 @@ public class Program2 {
           recvBuffer = MPI.newByteBuffer(totalSize);
         }
         try {
+          allGatherStart = System.nanoTime();
           MPI.COMM_WORLD.gatherv(sendBuffer, receiveSizes[rank], MPI.BYTE, recvBuffer, receiveSizes, displacements, MPI.BYTE, i);
           if (i == rank) {
+            elapsedMillis = ((double)System.nanoTime() - allGatherStart) / 1000000.0;
+            LOG.info(String.format("Rank: %d gather time: %f", rank, elapsedMillis));
             sorter.addData(recvBuffer, totalSize);
           }
         } catch (ArrayIndexOutOfBoundsException e) {
