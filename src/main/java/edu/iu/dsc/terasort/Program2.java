@@ -180,11 +180,7 @@ public class Program2 {
             int recordPosition = partitionedKeys.get(k);
             sendBuffer.put(records, recordPosition * Record.RECORD_LENGTH, Record.RECORD_LENGTH);
           }
-        } catch (IndexOutOfBoundsException e) {
-          throw new RuntimeException(e);
-        }
 
-        try {
           allGatherStart = System.nanoTime();
           recvBuffer.rewind();
           LOG.info(String.format("Rank: %d start gathering round %d", rank, round));
@@ -194,7 +190,7 @@ public class Program2 {
             LOG.info(String.format("Rank: %d gather time: %f", rank, elapsedMillis));
             sorter.addData(recvBuffer, totalSize);
           }
-        } catch (ArrayIndexOutOfBoundsException e) {
+        } catch (IndexOutOfBoundsException e) {
           LOG.log(Level.INFO, "Rank: " + rank, e);
           throw new RuntimeException(e);
         }

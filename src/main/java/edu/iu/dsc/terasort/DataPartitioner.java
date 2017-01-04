@@ -5,6 +5,7 @@ import mpi.MPI;
 import mpi.MPIException;
 import org.apache.hadoop.io.Text;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -55,17 +56,19 @@ public class DataPartitioner {
     }
 
     int noOfSelectedKeys = worldSize - 1;
-    byte []selectedKeys = new byte[Record.KEY_SIZE * noOfSelectedKeys];
+    ByteBuffer selectedKeys = MPI.newByteBuffer(Record.KEY_SIZE * noOfSelectedKeys);
+    byte[] selectedKeysBytes = new byte[Record.KEY_SIZE * noOfSelectedKeys];
     if (globalRank < places) {
       int totalRecordsSize = Record.KEY_SIZE * numberOfRecords * places;
-      byte[] totalRecords = new byte[totalRecordsSize];
+      ByteBuffer totalRecords = MPI.newByteBuffer(totalRecordsSize);
       int bytestToSend = numberOfRecords * Record.KEY_SIZE;
-      byte[] sendingKeys = new byte[bytestToSend];
+      ByteBuffer sendingKeys = MPI.newByteBuffer(bytestToSend);
       LOG.log(Level.INFO, "Rank: " + globalRank + " Local: " + rank + " Total record: " +
           totalRecordsSize + " process records: " + numberOfRecords + " Sending bytes: " + bytestToSend);
       for (int i = 0; i < numberOfRecords; i++) {
         Record r = records[i];
-        System.arraycopy(r.getKey().getBytes(), 0, sendingKeys, i * Record.KEY_SIZE, Record.KEY_SIZE);
+//        System.arraycopy(r.getKey().getBytes(), 0, sendingKeys, i * Record.KEY_SIZE, Record.KEY_SIZE);
+        sendingKeys.put(r.getKey().getBytes(), 0, Record.KEY_SIZE);
       }
       // send the records
       partitionCommunicator.gather(sendingKeys, bytestToSend, MPI.BYTE, totalRecords, bytestToSend, MPI.BYTE, 0);
@@ -75,7 +78,7 @@ public class DataPartitioner {
         Record[] partitionRecords = new Record[numberOfRecords * places];
         for (int i = 0; i < numberOfRecords * places; i++) {
           byte[] key = new byte[Record.KEY_SIZE];
-          System.arraycopy(totalRecords, i * Record.KEY_SIZE, key, 0, Record.KEY_SIZE);
+          totalRecords.get(key, 0, Record.KEY_SIZE);
           partitionRecords[i] = new Record(new Text(key));
         }
 
@@ -83,15 +86,18 @@ public class DataPartitioner {
 
         int div = numberOfRecords * places / worldSize;
         for (int i = 0; i < noOfSelectedKeys; i++) {
-          System.arraycopy(partitionRecords[(i + 1) * div].getKey().getBytes(), 0,
-              selectedKeys, i * Record.KEY_SIZE, Record.KEY_SIZE);
+//          System.arraycopy(partitionRecords[(i + 1) * div].getKey().getBytes(), 0,
+//              selectedKeys, i * Record.KEY_SIZE, Record.KEY_SIZE);
+          selectedKeys.put(partitionRecords[(i + 1) * div].getKey().getBytes());
         }
       }
     }
 
     // process 0 has the records, send them to all the nodes
     // we broadcast this to all the nodes
+    selectedKeys.rewind();
     MPI.COMM_WORLD.bcast(selectedKeys, Record.KEY_SIZE * noOfSelectedKeys, MPI.BYTE, 0);
-    return selectedKeys;
+    selectedKeys.get(selectedKeysBytes, 0, Record.KEY_SIZE * noOfSelectedKeys);
+    return selectedKeysBytes;
   }
 }
