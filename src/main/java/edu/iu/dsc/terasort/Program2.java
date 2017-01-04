@@ -183,7 +183,7 @@ public class Program2 {
         try {
           allGatherStart = System.nanoTime();
           recvBuffer.rewind();
-          LOG.info("Rank: %d start gathering");
+          LOG.info(String.format("Rank: %d start gathering", rank));
           MPI.COMM_WORLD.gatherv(sendBuffer, sendSize, MPI.BYTE, recvBuffer, receiveSizes, displacements, MPI.BYTE, i);
           if (i == rank) {
             elapsedMillis = ((double)System.nanoTime() - allGatherStart) / 1000000.0;
