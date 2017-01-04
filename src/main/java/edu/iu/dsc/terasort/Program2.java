@@ -120,8 +120,12 @@ public class Program2 {
       // now lets go through each partition and do a gather
       // first lest send the expected amounts to each process
       // we pre-allocate this buffer as this is the max amount we are going to send at each time
-      expectedAmountSendBuffer.rewind();
-      expectedAmountReceiveBuffer.rewind();
+      recvBuffer.clear();
+      sendBuffer.clear();
+      expectedAmountSendBuffer.clear();
+      expectedAmountReceiveBuffer.clear();
+      maxRoundsBuffer.clear();
+
       expectedAmountSendBuffer.put(partitionedRecords.get(i).size() * Record.RECORD_LENGTH);
       long allGatherStart = System.nanoTime();
       // LOG.info(String.format("Rank: %d start gather", rank));
@@ -139,7 +143,6 @@ public class Program2 {
         }
       }
 
-      maxRoundsBuffer.rewind();
       maxRoundsBuffer.put(maxRounds);
       MPI.COMM_WORLD.bcast(maxRoundsBuffer, 1, MPI.INT, i);
       maxRoundsBuffer.rewind();
@@ -167,7 +170,6 @@ public class Program2 {
         }
 
         // copy the data
-        sendBuffer.rewind();
         List<Integer> partitionedKeys = partitionedRecords.get(i);
         int sendSize = new Double(Math.ceil((double)partitionedKeys.size() / (maxRounds))).intValue();
         if (sendSize * (round + 1) > partitionedKeys.size()) {
@@ -175,6 +177,7 @@ public class Program2 {
         }
 
         try {
+          sendBuffer.clear();
           for (int j = 0; j < sendSize; j++) {
             int k = round * sendSize + j;
             int recordPosition = partitionedKeys.get(k);
@@ -182,7 +185,6 @@ public class Program2 {
           }
 
           allGatherStart = System.nanoTime();
-          recvBuffer.rewind();
           LOG.info(String.format("Rank: %d start gathering round %d", rank, round));
           MPI.COMM_WORLD.gatherv(sendBuffer, sendSize, MPI.BYTE, recvBuffer, receiveSizes, displacements, MPI.BYTE, i);
           if (i == rank) {
