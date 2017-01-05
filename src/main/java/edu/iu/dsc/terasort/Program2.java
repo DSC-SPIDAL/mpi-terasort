@@ -78,6 +78,7 @@ public class Program2 {
   }
 
   public void partialSendExecute() throws MPIException {
+    long startTime = System.currentTimeMillis();
     rank = MPI.COMM_WORLD.getRank();
     worldSize = MPI.COMM_WORLD.getSize();
     localRank = Integer.parseInt(System.getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
@@ -91,12 +92,16 @@ public class Program2 {
       partitionedRecords.put(i, new ArrayList<>());
     }
 
+    long readStartTime = System.currentTimeMillis();
     String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank)).toString();
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
     DataLoader loader = new DataLoader(inputFile, outputFile);
     byte []records = loader.loadArray(rank);
+    long readEndTime = System.currentTimeMillis();
     int numberOfRecords = records.length / Record.RECORD_LENGTH;
     LOG.info("Rank: " + rank + " Loaded records: " + records.length);
+
+    long partitionStartTime = System.currentTimeMillis();
     PartitionTree partitionTree = buildPartitionTree(records);
     MPI.COMM_WORLD.barrier();
 
@@ -110,12 +115,7 @@ public class Program2 {
       int partition = partitionTree.getPartition(r.getKey());
       partitionedRecords.get(partition).add(i);
     }
-
-//    String s = "";
-//    for (Integer i : partitionedRecords.keySet()) {
-//      s += i + ": " + partitionedRecords.get(i).size() + " ";
-//    }
-//    LOG.info(String.format("Rank %d: partitions %s", rank, s));
+    long partitionEndTime = System.currentTimeMillis();
 
     ByteBuffer recvBuffer = MPI.newByteBuffer(maxSendRecordsBytes * worldSize);
     ByteBuffer sendBuffer = MPI.newByteBuffer(maxSendRecordsBytes);
@@ -123,6 +123,7 @@ public class Program2 {
     IntBuffer expectedAmountReceiveBuffer = MPI.newIntBuffer(worldSize);
     IntBuffer maxRoundsBuffer = MPI.newIntBuffer(1);
     // go through each partition
+    long datShuffleStartTime = System.currentTimeMillis();
     for (int i = 0; i < worldSize; i++) {
       // now lets go through each partition and do a gather
       // first lest send the expected amounts to each process
@@ -138,26 +139,21 @@ public class Program2 {
       // LOG.info(String.format("Rank: %d start gather", rank));
       MPI.COMM_WORLD.gather(expectedAmountSendBuffer, 1, MPI.INT, expectedAmountReceiveBuffer, 1, MPI.INT, i);
       double elapsedMillis = ((double)System.nanoTime() - allGatherStart) / 1000000.0;
-      // LOG.info(String.format("Rank: %d gather time: %f", rank, elapsedMillis));
 
       int maxRounds = 0;
-//      s = "";
       if (rank == i) {
         for (int j = 0; j < worldSize; j++) {
           int temp = new Double(Math.ceil((double) expectedAmountReceiveBuffer.get(j) / maxSendRecordsBytes)).intValue();
           if (temp > maxRounds) {
             maxRounds = temp;
           }
-//          s += expectedAmountReceiveBuffer.get(j) + " ";
         }
-//        LOG.info(String.format("Rank: %d expects this amount from others: %s", rank, s));
       }
 
       maxRoundsBuffer.put(maxRounds);
       MPI.COMM_WORLD.bcast(maxRoundsBuffer, 1, MPI.INT, i);
       maxRoundsBuffer.rewind();
       maxRounds = maxRoundsBuffer.get();
-//      LOG.info(String.format("Rank %d max rounds %d", rank, maxRounds));
 
       int round = 0;
       // now do several gathers to gather all the data from the buffers
@@ -165,8 +161,6 @@ public class Program2 {
         int totalSize = 0;
         displacements[0] = 0;
         if (rank == i) {
-//          s = "";
-//          String s2 = "";
           for (int j = 0; j < worldSize; j++) {
             int temp = new Double(Math.ceil((double) expectedAmountReceiveBuffer.get(j) / (maxRounds * Record.RECORD_LENGTH))).intValue();
             if (temp * (round + 1) > expectedAmountReceiveBuffer.get(j) / Record.RECORD_LENGTH) {
@@ -177,11 +171,7 @@ public class Program2 {
             if (j > 0) {
               displacements[j] = displacements[j - 1] + receiveSizes[j - 1];
             }
-//            s += receiveSizes[j] + " ";
-//            s2 += displacements[j] + " ";
           }
-//          LOG.info(String.format("Rank: %s expects sizes from nodes in round %d: %s", rank, round, s));
-//          LOG.info(String.format("Rank: %s expects displace sizes from nodes in round %d: %s", rank, round, s2));
         }
 
         // copy the data
@@ -192,7 +182,6 @@ public class Program2 {
         }
 
         try {
-//          LOG.info(String.format("Rank %d send size %d to rank %d", rank, sendSize, i));
           sendBuffer.clear();
           for (int j = 0; j < sendSize; j++) {
             int k = round * sendSize + j;
@@ -201,12 +190,10 @@ public class Program2 {
           }
 
           allGatherStart = System.nanoTime();
-          // LOG.info(String.format("Rank: %d start gathering round %d", rank, round));
           recvBuffer.rewind();
           MPI.COMM_WORLD.gatherv(sendBuffer, sendSize * Record.RECORD_LENGTH, MPI.BYTE, recvBuffer, receiveSizes, displacements, MPI.BYTE, i);
           if (i == rank) {
             elapsedMillis = ((double)System.nanoTime() - allGatherStart) / 1000000.0;
-            // LOG.info(String.format("Rank: %d gather time: %f", rank, elapsedMillis));
             sorter.addData(recvBuffer, totalSize);
           }
         } catch (IndexOutOfBoundsException e) {
@@ -217,8 +204,24 @@ public class Program2 {
       }
       LOG.info(String.format("Rank %d finished sending to rank %d", rank, i));
     }
+    long dataShuffleEndTime = System.currentTimeMillis();
+
+    long sortingTime = System.currentTimeMillis();
     Record[] sortedRecords = sorter.sort();
+    long sortingEndTime = System.currentTimeMillis();
+
+    long saveTime = System.currentTimeMillis();
     loader.save(sortedRecords);
+    long saveEndTime = System.currentTimeMillis();
+
+    if (rank == 0) {
+      LOG.info("Total time: " + (System.currentTimeMillis() - startTime));
+      LOG.info("Read time: " + (readEndTime - readStartTime));
+      LOG.info("Partition time: " + (partitionEndTime - partitionStartTime));
+      LOG.info("Shuffle time: " + (dataShuffleEndTime - datShuffleStartTime));
+      LOG.info("Sort time: " + (sortingEndTime - sortingTime));
+      LOG.info("Save time: " + (saveEndTime - saveTime));
+    }
   }
 
 
@@ -256,7 +259,6 @@ public class Program2 {
       t.set(selectedKeys, i * Record.KEY_SIZE, Record.KEY_SIZE);
 
       partitions[i] = t;
-      // LOG.info("rank: " + rank + " Partition tree: " + t.toString());
     }
 
     PartitionTree.TrieNode root = PartitionTree.buildTrie(partitions, 0, partitions.length, new Text(), 2);
