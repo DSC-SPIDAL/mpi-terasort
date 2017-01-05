@@ -83,7 +83,8 @@ public class Program2 {
     localRank = Integer.parseInt(System.getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
     LOG.info("Local rank: " + localRank);
     MergeSorter sorter = new MergeSorter(rank);
-
+    int[] receiveSizes = new int[worldSize];
+    int[] displacements = new int[worldSize];
     // create the partitioned record list
     Map<Integer, List<Integer>> partitionedRecords = new HashMap<Integer, List<Integer>>();
     for (int i = 0; i < worldSize; i++) {
@@ -110,6 +111,12 @@ public class Program2 {
       partitionedRecords.get(partition).add(i);
     }
 
+//    String s = "";
+//    for (Integer i : partitionedRecords.keySet()) {
+//      s += i + ": " + partitionedRecords.get(i).size() + " ";
+//    }
+//    LOG.info(String.format("Rank %d: partitions %s", rank, s));
+
     ByteBuffer recvBuffer = MPI.newByteBuffer(maxSendRecordsBytes * worldSize);
     ByteBuffer sendBuffer = MPI.newByteBuffer(maxSendRecordsBytes);
     IntBuffer expectedAmountSendBuffer = MPI.newIntBuffer(1);
@@ -134,28 +141,32 @@ public class Program2 {
       // LOG.info(String.format("Rank: %d gather time: %f", rank, elapsedMillis));
 
       int maxRounds = 0;
+//      s = "";
       if (rank == i) {
         for (int j = 0; j < worldSize; j++) {
           int temp = new Double(Math.ceil((double) expectedAmountReceiveBuffer.get(j) / maxSendRecordsBytes)).intValue();
           if (temp > maxRounds) {
             maxRounds = temp;
           }
+//          s += expectedAmountReceiveBuffer.get(j) + " ";
         }
+//        LOG.info(String.format("Rank: %d expects this amount from others: %s", rank, s));
       }
 
       maxRoundsBuffer.put(maxRounds);
       MPI.COMM_WORLD.bcast(maxRoundsBuffer, 1, MPI.INT, i);
       maxRoundsBuffer.rewind();
       maxRounds = maxRoundsBuffer.get();
+//      LOG.info(String.format("Rank %d max rounds %d", rank, maxRounds));
 
       int round = 0;
       // now do several gathers to gather all the data from the buffers
       while (round < maxRounds) {
         int totalSize = 0;
-        int[] receiveSizes = new int[worldSize];
-        int[] displacements = new int[worldSize];
         displacements[0] = 0;
         if (rank == i) {
+//          s = "";
+//          String s2 = "";
           for (int j = 0; j < worldSize; j++) {
             int temp = new Double(Math.ceil((double) expectedAmountReceiveBuffer.get(j) / (maxRounds * Record.RECORD_LENGTH))).intValue();
             if (temp * (round + 1) > expectedAmountReceiveBuffer.get(j) / Record.RECORD_LENGTH) {
@@ -166,7 +177,11 @@ public class Program2 {
             if (j > 0) {
               displacements[j] = displacements[j - 1] + receiveSizes[j - 1];
             }
+//            s += receiveSizes[j] + " ";
+//            s2 += displacements[j] + " ";
           }
+//          LOG.info(String.format("Rank: %s expects sizes from nodes in round %d: %s", rank, round, s));
+//          LOG.info(String.format("Rank: %s expects displace sizes from nodes in round %d: %s", rank, round, s2));
         }
 
         // copy the data
@@ -177,6 +192,7 @@ public class Program2 {
         }
 
         try {
+//          LOG.info(String.format("Rank %d send size %d to rank %d", rank, sendSize, i));
           sendBuffer.clear();
           for (int j = 0; j < sendSize; j++) {
             int k = round * sendSize + j;
@@ -185,11 +201,12 @@ public class Program2 {
           }
 
           allGatherStart = System.nanoTime();
-          LOG.info(String.format("Rank: %d start gathering round %d", rank, round));
-          MPI.COMM_WORLD.gatherv(sendBuffer, sendSize, MPI.BYTE, recvBuffer, receiveSizes, displacements, MPI.BYTE, i);
+          // LOG.info(String.format("Rank: %d start gathering round %d", rank, round));
+          recvBuffer.rewind();
+          MPI.COMM_WORLD.gatherv(sendBuffer, sendSize * Record.RECORD_LENGTH, MPI.BYTE, recvBuffer, receiveSizes, displacements, MPI.BYTE, i);
           if (i == rank) {
             elapsedMillis = ((double)System.nanoTime() - allGatherStart) / 1000000.0;
-            LOG.info(String.format("Rank: %d gather time: %f", rank, elapsedMillis));
+            // LOG.info(String.format("Rank: %d gather time: %f", rank, elapsedMillis));
             sorter.addData(recvBuffer, totalSize);
           }
         } catch (IndexOutOfBoundsException e) {
@@ -198,6 +215,7 @@ public class Program2 {
         }
         round++;
       }
+      LOG.info(String.format("Rank %d finished sending to rank %d", rank, i));
     }
     Record[] sortedRecords = sorter.sort();
     loader.save(sortedRecords);

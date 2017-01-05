@@ -102,7 +102,6 @@ public class Program {
       System.arraycopy(r.getKey().getBytes(), 0, allRecords, i * Record.RECORD_LENGTH, Record.KEY_SIZE);
       System.arraycopy(r.getText().getBytes(), 0, allRecords, i * Record.RECORD_LENGTH + Record.KEY_SIZE, Record.DATA_SIZE);
       int partition = partitionTree.getPartition(r.getKey());
-      // LOG.log(Level.INFO, "Partition is: " + partition);
 
       // we are changing partitions or this is the last
       if (partition != currentPartition || (i == records.size() - 1) && i != 0) {
