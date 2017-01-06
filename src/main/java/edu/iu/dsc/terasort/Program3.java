@@ -169,7 +169,7 @@ public class Program3 {
     IntBuffer sizeBuffer = MPI.newIntBuffer(1);
     if (sendRank != rank) {
       sizeBuffer.put(size);
-      LOG.info(String.format("Rank: %d sending size: %d to: %d", rank, size, sendRank));
+//      LOG.info(String.format("Rank: %d sending size: %d to: %d", rank, size, sendRank));
       MPI.COMM_WORLD.sSend(data, size, MPI.BYTE, sendRank, 100);
     } else {
       sorter.addData(data, size);
@@ -208,9 +208,9 @@ public class Program3 {
             continue;
           }
 
-          LOG.info(String.format("Rank: %d recv 2", rank));
+//          LOG.info(String.format("Rank: %d recv 2", rank));
           MPI.COMM_WORLD.recv(data, size, MPI.BYTE, status.getSource(), 100);
-          LOG.info(String.format("Rank: %d received %d from %d", rank, size, status.getSource()));
+//          LOG.info(String.format("Rank: %d received %d from %d", rank, size, status.getSource()));
           sorter.addData(data, size);
         } catch (MPIException e) {
           LOG.log(Level.SEVERE, "MPI Exception", e);
