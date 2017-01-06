@@ -204,6 +204,7 @@ public class Program3 {
 
           if (size == 1) {
             MPI.COMM_WORLD.recv(data, size, MPI.BYTE, status.getSource(), 100);
+            LOG.info(String.format("Rank %d finished receiving from %d: ", rank, status.getSource()));
             finishedSenders--;
             continue;
           }
