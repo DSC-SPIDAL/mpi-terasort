@@ -18,7 +18,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class Program4 {
-  private static Logger LOG = Logger.getLogger(Program2.class.getName());
+  private static Logger LOG = Logger.getLogger(Program4.class.getName());
 
   private String inputFolder;
   private String filePrefix;
@@ -41,9 +41,9 @@ public class Program4 {
 
   public static void main(String[] args) {
     try {
-      MPI.Init(args);
+      MPI.InitThread(args, MPI.THREAD_MULTIPLE);
       // execute the program
-      Program2 program = new Program2(args);
+      Program4 program = new Program4(args);
       program.partialSendExecute();
 
 
@@ -155,6 +155,9 @@ public class Program4 {
       MPI.COMM_WORLD.send(sizeBuffer, 1, MPI.BYTE, sendingRank, 100);
       LOG.info(String.format("Rank %d finished sending to rank %d", rank, sendingRank));
     }
+    try {
+      t.join();
+    } catch (InterruptedException e) {}
     long dataShuffleEndTime = System.currentTimeMillis();
 
     long sortingTime = System.currentTimeMillis();

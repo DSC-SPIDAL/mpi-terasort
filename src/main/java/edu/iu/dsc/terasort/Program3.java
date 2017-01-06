@@ -17,7 +17,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class Program3 {
-  private static Logger LOG = Logger.getLogger(Program2.class.getName());
+  private static Logger LOG = Logger.getLogger(Program3.class.getName());
 
   private String inputFolder;
   private String filePrefix;
