@@ -131,15 +131,16 @@ public class Program4 {
       // first lest send the expected amounts to each process
       // we pre-allocate this buffer as this is the max amount we are going to send at each time
       int sendingRank = (rank + i) % worldSize;
-      sendBuffer.clear();
 
       // now do several gathers to gather all the data from the buffers
       List<Integer> partitionedKeys = partitionedRecords.get(sendingRank);
-      sendBuffer.clear();
+      sendBuffer.rewind();
       int currentSize = 0;
       for (int j = 0; j < partitionedKeys.size(); j++) {
         if (j % maxSendRecords == 0 || j == partitionedKeys.size() - 1) {
           sendBuffer(sorter, currentSize, sendingRank, sendBuffer);
+          currentSize = 0;
+          sendBuffer.rewind();
         }
 
         int recordPosition = partitionedKeys.get(j);
