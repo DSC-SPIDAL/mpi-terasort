@@ -126,7 +126,7 @@ public class Program4 {
     ByteBuffer sizeBuffer = MPI.newByteBuffer(1);
     // go through each partition
     long datShuffleStartTime = System.currentTimeMillis();
-    for (int i = 1; i < worldSize; i++) {
+    for (int i = 0; i < worldSize; i++) {
       // now lets go through each partition and do a gather
       // first lest send the expected amounts to each process
       // we pre-allocate this buffer as this is the max amount we are going to send at each time
@@ -137,8 +137,8 @@ public class Program4 {
       sendBuffer.rewind();
       int currentSize = 0;
       for (int j = 0; j < partitionedKeys.size(); j++) {
-        if (j % maxSendRecords == 0 || j == partitionedKeys.size() - 1) {
-          sendBuffer(sorter, currentSize, sendingRank, sendBuffer);
+        if (j % maxSendRecords == 0) {
+          sendBuffer(sorter, currentSize * Record.RECORD_LENGTH, sendingRank, sendBuffer);
           currentSize = 0;
           sendBuffer.rewind();
         }
@@ -147,14 +147,21 @@ public class Program4 {
         sendBuffer.put(records, recordPosition * Record.RECORD_LENGTH, Record.RECORD_LENGTH);
         currentSize++;
       }
+      // send what even is left
+      if (currentSize != 0) {
+        sendBuffer(sorter, currentSize * Record.RECORD_LENGTH, sendingRank, sendBuffer);
+      }
 
       LOG.info("Sending 0: " + rank);
       // send 0 to mark the end
-      sizeBuffer.rewind();
-      sizeBuffer.put(new Integer(0).byteValue());
-      MPI.COMM_WORLD.send(sizeBuffer, 1, MPI.BYTE, sendingRank, 100);
-      LOG.info(String.format("Rank %d finished sending to rank %d", rank, sendingRank));
+      if (sendingRank != rank) {
+        sizeBuffer.rewind();
+        sizeBuffer.put(new Integer(0).byteValue());
+        MPI.COMM_WORLD.send(sizeBuffer, 1, MPI.BYTE, sendingRank, 100);
+        LOG.info(String.format("Rank %d finished sending to rank %d", rank, sendingRank));
+      }
     }
+
     try {
       t.join();
     } catch (InterruptedException e) {}
