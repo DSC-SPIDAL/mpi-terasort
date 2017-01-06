@@ -195,31 +195,26 @@ public class Program3 {
           break;
         }
 
-        for (int source = 0; source < worldSize; source++) {
-          if (source == rank) {
+        try {
+          Status status = MPI.COMM_WORLD.iProbe(MPI.ANY_SOURCE, 100);
+          if (status == null) {
+            continue;
+          }
+          int size = status.getCount(MPI.BYTE);
+
+          if (size == 1) {
+            MPI.COMM_WORLD.recv(data, size, MPI.BYTE, status.getSource(), 100);
+            finishedSenders--;
             continue;
           }
 
-          try {
-            Status status = MPI.COMM_WORLD.iProbe(MPI.ANY_SOURCE, 100);
-            if (status == null) {
-              continue;
-            }
-            int size = status.getCount(MPI.BYTE);
-
-            if (size == 1) {
-              finishedSenders--;
-              continue;
-            }
-
-            LOG.info(String.format("Rank: %d recv 2", rank));
-            MPI.COMM_WORLD.recv(data, size, MPI.BYTE, status.getSource(), 100);
-            LOG.info(String.format("Rank: %d received %d from %d", rank, size, status.getSource()));
-            sorter.addData(data, size);
-          } catch (MPIException e) {
-            LOG.log(Level.SEVERE, "MPI Exception", e);
-            throw new RuntimeException(e);
-          }
+          LOG.info(String.format("Rank: %d recv 2", rank));
+          MPI.COMM_WORLD.recv(data, size, MPI.BYTE, status.getSource(), 100);
+          LOG.info(String.format("Rank: %d received %d from %d", rank, size, status.getSource()));
+          sorter.addData(data, size);
+        } catch (MPIException e) {
+          LOG.log(Level.SEVERE, "MPI Exception", e);
+          throw new RuntimeException(e);
         }
       }
     }
