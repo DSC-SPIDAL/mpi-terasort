@@ -7,11 +7,12 @@ import mpi.Status;
 import org.apache.commons.cli.*;
 import org.apache.hadoop.io.Text;
 
-import javax.swing.plaf.synth.SynthTextAreaUI;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -33,13 +34,15 @@ public class Program3 {
   // local rank in the node
   private int localRank;
 
+  private Lock lock;
+
   public Program3(String []args) {
     readProgramArgs(args);
   }
 
   public static void main(String[] args) {
     try {
-      MPI.Init(args);
+      MPI.InitThread(args, MPI.THREAD_SERIALIZED);
       // execute the program
       Program3 program = new Program3(args);
       program.partialSendExecute();
@@ -52,6 +55,7 @@ public class Program3 {
   }
 
   private void readProgramArgs(String []args) {
+    lock = new ReentrantLock();
     Options options = new Options();
     options.addOption("input", true, "Input directory");
     options.addOption("output", true, "Output directory");
@@ -165,10 +169,15 @@ public class Program3 {
     IntBuffer sizeBuffer = MPI.newIntBuffer(1);
     if (sendRank != rank) {
       sizeBuffer.put(size);
-      MPI.COMM_WORLD.send(sizeBuffer, 1, MPI.INT, sendRank, 100);
+      // MPI.COMM_WORLD.send(sizeBuffer, 1, MPI.INT, sendRank, 100);
       // it is time to send this buffer
-      LOG.info(String.format("Rank: %d sending size: %d to: %d", rank, size, sendRank));
-      MPI.COMM_WORLD.send(data, size, MPI.BYTE, sendRank, 100);
+      lock.lock();
+      try {
+        LOG.info(String.format("Rank: %d sending size: %d to: %d", rank, size, sendRank));
+        MPI.COMM_WORLD.sSend(data, size, MPI.BYTE, sendRank, 100);
+      } finally {
+        lock.unlock();
+      }
     } else {
 //      sorter.addData(rank, data.get);
     }
@@ -200,26 +209,37 @@ public class Program3 {
           }
 
           try {
-            Status status = MPI.COMM_WORLD.iProbe(source, 100);
-            if (status == null) {
-              continue;
-            }
-            int size = status.getCount(MPI.INT);
-            if (size != 1) {
-              throw new RuntimeException("Unexpected value, expecting 1 received: " + size);
-            }
+            LOG.info(String.format("Rank %d wait probe", rank));
+            lock.lock();
+            try {
+              Status status = MPI.COMM_WORLD.iProbe(MPI.ANY_SOURCE, 100);
+              if (status == null) {
+                continue;
+              }
+              int size = status.getCount(MPI.BYTE);
 
-            LOG.info(String.format("Rank: %d recv 1", rank));
-            MPI.COMM_WORLD.recv(sizeBuffer, 1, MPI.INT, source, 100);
-            if (sizeBuffer.get(0) == 0) {
-              LOG.info("Rank: " + source + " Finished sending");
-              finishedSenders--;
-              continue;
-            }
+              if (data.capacity() < size) {
+                throw new RuntimeException(String.format("Capacity %d size %d", data.capacity(), size));
+              }
+//            if (size != 1) {
+//              throw new RuntimeException("Unexpected value, expecting 1 received: " + size);
+//            }
 
-            LOG.info(String.format("Rank: %d recv 2", rank));
-            MPI.COMM_WORLD.recv(data, sizeBuffer.get(0), MPI.BYTE, source, 100);
-            LOG.info(String.format("Rank: %d received %d from %d", rank, sizeBuffer.get(0), source));
+//            LOG.info(String.format("Rank: %d recv 1", rank));
+//            MPI.COMM_WORLD.recv(sizeBuffer, 1, MPI.INT, status.getSource(), 100);
+//            if (sizeBuffer.get(0) == 0) {
+//              LOG.info("Rank: " + status.getSource() + " Finished sending");
+//              finishedSenders--;
+//              continue;
+//            }
+
+              LOG.info(String.format("Rank: %d recv 2", rank));
+
+              MPI.COMM_WORLD.recv(data, size, MPI.BYTE, status.getSource(), 100);
+              LOG.info(String.format("Rank: %d received %d from %d", rank, size, status.getSource()));
+            } finally {
+              lock.unlock();
+            }
             // sorter.addDataNonSorted(source, data);
           } catch (MPIException e) {
             LOG.log(Level.SEVERE, "MPI Exception", e);
