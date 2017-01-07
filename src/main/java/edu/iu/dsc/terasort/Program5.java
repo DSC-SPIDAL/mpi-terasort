@@ -183,7 +183,7 @@ public class Program5 {
     long sortingEndTime = System.currentTimeMillis();
 
     long saveTime = System.currentTimeMillis();
-    loader.save(sortedRecords);
+    loader.saveFast(sortedRecords);
     MPI.COMM_WORLD.barrier();
     long saveEndTime = System.currentTimeMillis();
 

@@ -4,6 +4,8 @@ import org.apache.hadoop.hdfs.server.datanode.ReplicaUnderRecovery;
 import org.apache.hadoop.io.Text;
 
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -94,6 +96,22 @@ public class DataLoader {
         os.write(r.getText().getBytes(), 0, Record.DATA_SIZE);
       }
       os.close();
+    } catch (IOException e) {
+      LOG.log(Level.SEVERE, "Failed write to disc", e);
+      throw new RuntimeException(e);
+    }
+  }
+
+  public void saveFast(Record[] records) {
+    try {
+      FileChannel rwChannel = new RandomAccessFile(outFileName, "rw").getChannel();
+      ByteBuffer os = rwChannel.map(FileChannel.MapMode.READ_WRITE, 0, records.length * Record.RECORD_LENGTH);
+      for (int i = 0; i < records.length; i++) {
+        Record r = records[i];
+        os.put(r.getKey().getBytes(), 0, Record.KEY_SIZE);
+        os.put(r.getText().getBytes(), 0, Record.DATA_SIZE);
+      }
+      rwChannel.close();
     } catch (IOException e) {
       LOG.log(Level.SEVERE, "Failed write to disc", e);
       throw new RuntimeException(e);
