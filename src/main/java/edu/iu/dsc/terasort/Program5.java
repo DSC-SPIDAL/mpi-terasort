@@ -96,13 +96,13 @@ public class Program5 {
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
     DataLoader loader = new DataLoader(inputFile, outputFile);
     byte []records = loader.loadArray(rank);
+    MPI.COMM_WORLD.barrier();
     long readEndTime = System.currentTimeMillis();
     int numberOfRecords = records.length / Record.RECORD_LENGTH;
     LOG.info("Rank: " + rank + " Loaded records: " + records.length);
 
     long partitionStartTime = System.currentTimeMillis();
     PartitionTree partitionTree = buildPartitionTree(records);
-    MPI.COMM_WORLD.barrier();
 
     // number of records in each buffer
     byte[] keyBuffer = new byte[Record.KEY_SIZE];
@@ -114,6 +114,7 @@ public class Program5 {
       int partition = partitionTree.getPartition(r.getKey());
       partitionedRecords.get(partition).add(i);
     }
+    MPI.COMM_WORLD.barrier();
     long partitionEndTime = System.currentTimeMillis();
 
     // lets assume this is enough
@@ -178,10 +179,12 @@ public class Program5 {
 
     long sortingTime = System.currentTimeMillis();
     Record[] sortedRecords = sorter.sort();
+    MPI.COMM_WORLD.barrier();
     long sortingEndTime = System.currentTimeMillis();
 
     long saveTime = System.currentTimeMillis();
     loader.save(sortedRecords);
+    MPI.COMM_WORLD.barrier();
     long saveEndTime = System.currentTimeMillis();
 
     MPI.COMM_WORLD.barrier();
