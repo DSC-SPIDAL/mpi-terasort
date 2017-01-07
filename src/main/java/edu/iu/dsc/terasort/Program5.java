@@ -173,7 +173,7 @@ public class Program5 {
     }
     receiveBuffer.rewind();
     sorter.addData(receiveBuffer, ownPartitions.size() * Record.RECORD_LENGTH);
-
+    MPI.COMM_WORLD.barrier();
     long dataShuffleEndTime = System.currentTimeMillis();
 
     long sortingTime = System.currentTimeMillis();
