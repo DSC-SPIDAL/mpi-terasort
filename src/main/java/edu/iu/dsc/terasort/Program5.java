@@ -184,6 +184,7 @@ public class Program5 {
     loader.save(sortedRecords);
     long saveEndTime = System.currentTimeMillis();
 
+    MPI.COMM_WORLD.barrier();
     if (rank == 0) {
       LOG.info("Total time: " + (System.currentTimeMillis() - startTime));
       LOG.info("Read time: " + (readEndTime - readStartTime));
