@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class Program4 {
+public class Program5 {
   private static Logger LOG = Logger.getLogger(Program4.class.getName());
 
   private String inputFolder;
@@ -32,15 +32,15 @@ public class Program4 {
   // local rank in the node
   private int localRank;
 
-  public Program4(String []args) {
+  public Program5(String []args) {
     readProgramArgs(args);
   }
 
   public static void main(String[] args) {
     try {
-      MPI.InitThread(args, MPI.THREAD_MULTIPLE);
+      MPI.Init(args);
       // execute the program
-      Program4 program = new Program4(args);
+      Program5 program = new Program5(args);
       program.partialSendExecute();
 
 
@@ -104,9 +104,6 @@ public class Program4 {
     PartitionTree partitionTree = buildPartitionTree(records);
     MPI.COMM_WORLD.barrier();
 
-    Thread t = new Thread(new ReceiveWorker(sorter, worldSize, maxSendRecords));
-    t.start();
-
     // number of records in each buffer
     byte[] keyBuffer = new byte[Record.KEY_SIZE];
     // now go through the partitions and add them to correct sendbuffer
@@ -119,49 +116,61 @@ public class Program4 {
     }
     long partitionEndTime = System.currentTimeMillis();
 
-    ByteBuffer sendBuffer = MPI.newByteBuffer(maxSendRecordsBytes);
+    // lets assume this is enough
+    ByteBuffer sendBuffer = MPI.newByteBuffer(records.length * 4 / worldSize);
+    ByteBuffer receiveBuffer = MPI.newByteBuffer(records.length * 4 / worldSize);
     ByteBuffer sizeBuffer = MPI.newByteBuffer(1);
     // go through each partition
     long datShuffleStartTime = System.currentTimeMillis();
-    for (int i = 0; i < worldSize; i++) {
+    for (int i = 1; i < worldSize; i++) {
       // now lets go through each partition and do a gather
       // first lest send the expected amounts to each process
       // we pre-allocate this buffer as this is the max amount we are going to send at each time
       int sendingRank = (rank + i) % worldSize;
+      int receivingRank = (rank - i + worldSize) % worldSize;
 
       // now do several gathers to gather all the data from the buffers
-      List<Integer> partitionedKeys = partitionedRecords.get(sendingRank);
+      List<Integer> sendingPartitionedKeys = partitionedRecords.get(sendingRank);
+      receiveBuffer.rewind();
       sendBuffer.rewind();
-      int currentSize = 0;
-      for (int j = 0; j < partitionedKeys.size(); j++) {
-        if (j % maxSendRecords == 0) {
-          sendBuffer(sorter, currentSize * Record.RECORD_LENGTH, sendingRank, sendBuffer);
-          currentSize = 0;
-          sendBuffer.rewind();
-        }
 
-        int recordPosition = partitionedKeys.get(j);
+      for (int j = 0; j < sendingPartitionedKeys.size(); j++) {
+        int recordPosition = sendingPartitionedKeys.get(j);
         sendBuffer.put(records, recordPosition * Record.RECORD_LENGTH, Record.RECORD_LENGTH);
-        currentSize++;
       }
-      // send what even is left
-      if (currentSize != 0) {
-        sendBuffer(sorter, currentSize * Record.RECORD_LENGTH, sendingRank, sendBuffer);
+      Request sendRequest = MPI.COMM_WORLD.iSend(sendBuffer, sendingPartitionedKeys.size() * Record.RECORD_LENGTH, MPI.BYTE, sendingRank, 100);
+
+      boolean sendCoomplete = false;
+      boolean receiveComplete = false;
+      while (!sendCoomplete || !receiveComplete) {
+        Status receiceStatus = MPI.COMM_WORLD.iProbe(receivingRank, 100);
+        if (receiceStatus != null && !receiveComplete) {
+          int count = receiceStatus.getCount(MPI.BYTE);
+          MPI.COMM_WORLD.recv(receiveBuffer, count, MPI.BYTE, receivingRank, 100);
+          receiveComplete = true;
+          sorter.addData(receiveBuffer, count);
+          receiveBuffer.rewind();
+        }
+        Status sendStatus = sendRequest.testStatus();
+        if (sendStatus != null && !sendCoomplete) {
+          sendCoomplete = true;
+        }
       }
 
-      LOG.info("Sending 0: " + rank);
-      // send 0 to mark the end
-      if (sendingRank != rank) {
-        sizeBuffer.rewind();
-        sizeBuffer.put(new Integer(0).byteValue());
-        MPI.COMM_WORLD.send(sizeBuffer, 1, MPI.BYTE, sendingRank, 100);
-        LOG.info(String.format("Rank %d finished sending to rank %d", rank, sendingRank));
-      }
+      MPI.COMM_WORLD.barrier();
     }
 
-    try {
-      t.join();
-    } catch (InterruptedException e) {}
+    LOG.info(String.format("Rank %d done bulk sending", rank));
+    List<Integer> ownPartitions = partitionedRecords.get(rank);
+    receiveBuffer.rewind();
+
+    for (int j = 0; j < ownPartitions.size(); j++) {
+      int recordPosition = ownPartitions.get(j);
+      receiveBuffer.put(records, recordPosition * Record.RECORD_LENGTH, Record.RECORD_LENGTH);
+    }
+    receiveBuffer.rewind();
+    sorter.addData(receiveBuffer, ownPartitions.size() * Record.RECORD_LENGTH);
+
     long dataShuffleEndTime = System.currentTimeMillis();
 
     long sortingTime = System.currentTimeMillis();
@@ -179,62 +188,6 @@ public class Program4 {
       LOG.info("Shuffle time: " + (dataShuffleEndTime - datShuffleStartTime));
       LOG.info("Sort time: " + (sortingEndTime - sortingTime));
       LOG.info("Save time: " + (saveEndTime - saveTime));
-    }
-  }
-
-  private void sendBuffer(MergeSorter sorter, int size,
-                          int sendRank, ByteBuffer data) throws MPIException {
-    IntBuffer sizeBuffer = MPI.newIntBuffer(1);
-    if (sendRank != rank) {
-      sizeBuffer.put(size);
-      MPI.COMM_WORLD.sSend(data, size, MPI.BYTE, sendRank, 100);
-    } else {
-      sorter.addData(data, size);
-    }
-  }
-
-  private class ReceiveWorker implements Runnable {
-    private MergeSorter sorter;
-
-    private int finishedSenders;
-    ByteBuffer data;
-
-    public ReceiveWorker(MergeSorter sorter, int worldSize, int bufferSize) {
-      this.sorter = sorter;
-      this.finishedSenders = worldSize - 1;
-      data = MPI.newByteBuffer(bufferSize * Record.RECORD_LENGTH);
-    }
-
-    @Override
-    public void run() {
-      while (true) {
-        if (finishedSenders == 0) {
-          break;
-        }
-
-        try {
-          Status status = MPI.COMM_WORLD.iProbe(MPI.ANY_SOURCE, 100);
-          if (status == null) {
-            continue;
-          }
-          int size = status.getCount(MPI.BYTE);
-
-          if (size == 1) {
-            MPI.COMM_WORLD.recv(data, size, MPI.BYTE, status.getSource(), 100);
-            LOG.info(String.format("Rank %d finished receiving from %d: ", rank, status.getSource()));
-            finishedSenders--;
-            continue;
-          }
-
-//          LOG.info(String.format("Rank: %d recv 2", rank));
-          MPI.COMM_WORLD.recv(data, size, MPI.BYTE, status.getSource(), 100);
-//          LOG.info(String.format("Rank: %d received %d from %d", rank, size, status.getSource()));
-          sorter.addData(data, size);
-        } catch (MPIException e) {
-          LOG.log(Level.SEVERE, "MPI Exception", e);
-          throw new RuntimeException(e);
-        }
-      }
     }
   }
 
@@ -278,5 +231,4 @@ public class Program4 {
     PartitionTree.TrieNode root = PartitionTree.buildTrie(partitions, 0, partitions.length, new Text(), 2);
     return new PartitionTree(root);
   }
-
 }
