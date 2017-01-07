@@ -16,6 +16,9 @@ public class MergeSorter {
 
   private List<Record[]> recordsList = new ArrayList<>();
 
+  byte[] key = new byte[Record.KEY_SIZE];
+  byte[] text = new byte[Record.DATA_SIZE];
+
   private static byte[] zero = new byte[Record.KEY_SIZE];
   private static byte[] largest = new byte[Record.KEY_SIZE];
   static {
@@ -39,12 +42,10 @@ public class MergeSorter {
   }
 
   public void addData(ByteBuffer data, int size) {
-    LOG.info(String.format("Rank: %d added data of size %d: ", rank, size));
+   //  LOG.info(String.format("Rank: %d added data of size %d: ", rank, size));
     // for now lets get the keys and sort them
     int records = size / Record.RECORD_LENGTH;
     Record[] r = new Record[records];
-    byte[] key = new byte[Record.KEY_SIZE];
-    byte[] text = new byte[Record.DATA_SIZE];
     data.rewind();
     for (int i = 0; i < records; i++) {
       data.get(key, 0, Record.KEY_SIZE);

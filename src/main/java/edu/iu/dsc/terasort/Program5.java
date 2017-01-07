@@ -119,7 +119,6 @@ public class Program5 {
     // lets assume this is enough
     ByteBuffer sendBuffer = MPI.newByteBuffer(records.length * 4 / worldSize);
     ByteBuffer receiveBuffer = MPI.newByteBuffer(records.length * 4 / worldSize);
-    ByteBuffer sizeBuffer = MPI.newByteBuffer(1);
     // go through each partition
     long datShuffleStartTime = System.currentTimeMillis();
     for (int i = 1; i < worldSize; i++) {
@@ -157,7 +156,11 @@ public class Program5 {
         }
       }
 
-      MPI.COMM_WORLD.barrier();
+      if (i % 20 == 0) {
+        LOG.info(String.format("Rank %d progressing by sending to %d and receiving %d", rank, sendingRank, receivingRank));
+      }
+
+      // MPI.COMM_WORLD.barrier();
     }
 
     LOG.info(String.format("Rank %d done bulk sending", rank));
