@@ -157,11 +157,9 @@ public class Program5 {
         }
       }
 
-      if (i % 20 == 0) {
+      if (i % (worldSize / 2) == 0) {
         LOG.info(String.format("Rank %d progressing by sending to %d and receiving %d", rank, sendingRank, receivingRank));
       }
-
-      // MPI.COMM_WORLD.barrier();
     }
 
     LOG.info(String.format("Rank %d done bulk sending", rank));

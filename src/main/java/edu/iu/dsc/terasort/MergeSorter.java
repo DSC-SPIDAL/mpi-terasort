@@ -63,12 +63,12 @@ public class MergeSorter {
       for (int i = 0; i < recordsList.size(); i++) {
         // sort the list and add
         Record[] r = recordsList.get(i);
-        LOG.info(String.format("Rank: %d star sorting array of size %d", rank, r.length));
+//        LOG.info(String.format("Rank: %d star sorting array of size %d", rank, r.length));
         Arrays.sort(r);
         toSort[i] = r;
-        LOG.info(String.format("Rank: %d stop sorting", rank));
+//        LOG.info(String.format("Rank: %d stop sorting", rank));
       }
-      LOG.info(String.format("Rank: %d start merging number of arrays: %d", rank, toSort.length));
+//      LOG.info(String.format("Rank: %d start merging number of arrays: %d", rank, toSort.length));
       Record[] merge = merge(toSort, toSort.length);
       LOG.info("Done merging");
       return merge;
