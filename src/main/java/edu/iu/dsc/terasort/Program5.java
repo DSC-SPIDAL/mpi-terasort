@@ -94,8 +94,8 @@ public class Program5 {
     long readStartTime = System.currentTimeMillis();
     String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank)).toString();
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
-    DataLoader loader = new DataLoader(inputFile, outputFile);
-    byte []records = loader.loadArray(rank);
+    DataLoader loader = new DataLoader();
+    byte []records = loader.loadArray(rank, inputFile);
     MPI.COMM_WORLD.barrier();
     long readEndTime = System.currentTimeMillis();
     int numberOfRecords = records.length / Record.RECORD_LENGTH;
@@ -181,7 +181,7 @@ public class Program5 {
     long sortingEndTime = System.currentTimeMillis();
 
     long saveTime = System.currentTimeMillis();
-    loader.saveFast(sortedRecords);
+    loader.saveFast(sortedRecords, outputFile);
     MPI.COMM_WORLD.barrier();
     long saveEndTime = System.currentTimeMillis();
 

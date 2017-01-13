@@ -92,8 +92,8 @@ public class Program3 {
 
     String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank)).toString();
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
-    DataLoader loader = new DataLoader(inputFile, outputFile);
-    byte []records = loader.loadArray(rank);
+    DataLoader loader = new DataLoader();
+    byte []records = loader.loadArray(rank, inputFile);
     int numberOfRecords = records.length / Record.RECORD_LENGTH;
     LOG.info("Rank: " + rank + " Loaded records: " + records.length);
     PartitionTree partitionTree = buildPartitionTree(records);
@@ -160,7 +160,7 @@ public class Program3 {
 
     // now sort the data
     Record[] sortedRecords = sorter.sort();
-    loader.save(sortedRecords);
+    loader.save(sortedRecords, outputFile);
     MPI.COMM_WORLD.barrier();
   }
 

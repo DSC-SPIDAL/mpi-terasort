@@ -94,8 +94,8 @@ public class Program4 {
     long readStartTime = System.currentTimeMillis();
     String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank)).toString();
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
-    DataLoader loader = new DataLoader(inputFile, outputFile);
-    byte []records = loader.loadArray(rank);
+    DataLoader loader = new DataLoader();
+    byte []records = loader.loadArray(rank, inputFile);
     long readEndTime = System.currentTimeMillis();
     int numberOfRecords = records.length / Record.RECORD_LENGTH;
     LOG.info("Rank: " + rank + " Loaded records: " + records.length);
@@ -169,7 +169,7 @@ public class Program4 {
     long sortingEndTime = System.currentTimeMillis();
 
     long saveTime = System.currentTimeMillis();
-    loader.save(sortedRecords);
+    loader.save(sortedRecords, outputFile);
     long saveEndTime = System.currentTimeMillis();
 
     if (rank == 0) {

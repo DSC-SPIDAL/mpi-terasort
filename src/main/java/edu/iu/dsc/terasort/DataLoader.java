@@ -19,17 +19,12 @@ public class DataLoader {
 
   private List<Record> records = new ArrayList<>();
 
-  private String inFileName;
-  private String outFileName;
+  // private String inFileName;
+  // private String outFileName;
 
   private byte[] buffer = new byte[Record.RECORD_LENGTH];
 
-  public DataLoader(String inFileName, String outFileName) {
-    this.inFileName = inFileName;
-    this.outFileName = outFileName;
-  }
-
-  public List<Record> load(int rank) {
+  public List<Record> load(int rank, String inFileName) {
     try {
       DataInputStream in = new DataInputStream(
           new BufferedInputStream(
@@ -58,7 +53,7 @@ public class DataLoader {
     }
   }
 
-  public byte[] loadArray(int rank) {
+  public byte[] loadArray(int rank, String inFileName) {
     try {
       long fileSize = new File(inFileName).length();
       DataInputStream in = new DataInputStream(
@@ -86,7 +81,7 @@ public class DataLoader {
     }
   }
 
-  public void save(Record[] records) {
+  public void save(Record[] records, String outFileName) {
     DataOutputStream os;
     try {
       os = new DataOutputStream(new FileOutputStream(outFileName));
@@ -102,7 +97,7 @@ public class DataLoader {
     }
   }
 
-  public void saveFast(Record[] records) {
+  public void saveFast(Record[] records, String outFileName) {
     try {
       FileChannel rwChannel = new RandomAccessFile(outFileName, "rw").getChannel();
       ByteBuffer os = rwChannel.map(FileChannel.MapMode.READ_WRITE, 0, records.length * Record.RECORD_LENGTH);

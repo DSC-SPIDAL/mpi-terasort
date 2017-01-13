@@ -84,8 +84,8 @@ public class Program {
 
     String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank)).toString();
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
-    DataLoader loader = new DataLoader(inputFile, outputFile);
-    List<Record> records = loader.load(rank);
+    DataLoader loader = new DataLoader();
+    List<Record> records = loader.load(rank, inputFile);
     LOG.info("Rank: " + rank + " Loaded records: " + records.size());
     PartitionTree partitionTree = buildPartitionTree(records);
     MPI.COMM_WORLD.barrier();
@@ -151,7 +151,7 @@ public class Program {
     records.clear();
     // now sort the data
     Record[] sortedRecords = sorter.sort();
-    loader.save(sortedRecords);
+    loader.save(sortedRecords, outputFile);
   }
 
   private PartitionTree buildPartitionTree(List<Record> records) throws MPIException {
