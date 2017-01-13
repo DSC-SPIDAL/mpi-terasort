@@ -90,6 +90,7 @@ public class Program6 {
     long shuffleTime = 0;
     long sortTime = 0;
     DataLoader loader = new DataLoader();
+    PartitionTree partitionTree = null;
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
     for (int procFileNo = 0; procFileNo < filesPerProcess; procFileNo++) {
       // create the partitioned record list
@@ -109,7 +110,9 @@ public class Program6 {
       LOG.info("Rank: " + rank + " Loaded records: " + records.length);
 
       long partitionStartTime = System.currentTimeMillis();
-      PartitionTree partitionTree = buildPartitionTree(records);
+      if (partitionTree == null) {
+        partitionTree = buildPartitionTree(records);
+      }
 
       // number of records in each buffer
       byte[] keyBuffer = new byte[Record.KEY_SIZE];
