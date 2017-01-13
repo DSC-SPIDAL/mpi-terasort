@@ -8,4 +8,5 @@ itr=$3
 p=$4
 
 opts="-XX:+UseG1GC -Xms1G -Xmx1G"
-$BUILD/bin/mpirun --report-bindings -np $p --hostfile nodes.txt java $opts -cp ../target/$jar edu.iu.dsc.collectives.Program -collective $col -size $size -itr $itr  2>&1 | tee $summary
+btl="--mca btl tcp,sm,self --mca btl_tcp_if_include eth1"
+$BUILD/bin/mpirun --report-bindings $btl -np $p --hostfile nodes.txt java $opts -cp ../target/$jar edu.iu.dsc.collectives.Program -collective $col -size $size -itr $itr  2>&1 | tee $summary
