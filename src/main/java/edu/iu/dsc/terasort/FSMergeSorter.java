@@ -73,7 +73,7 @@ public class FSMergeSorter {
     try {
       recordsList.add(r);
       currentRecordsInMemory += r.length;
-      LOG.info(String.format("Rank %d add records %d", rank, currentRecordsInMemory));
+      // LOG.info(String.format("Rank %d add records %d", rank, currentRecordsInMemory));
       notFull.signal();
     } finally {
       lock.unlock();
