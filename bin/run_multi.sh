@@ -9,7 +9,9 @@ filePrefix=part
 summary=summary.txt
 sendBufferSize=500000
 filesPerProcess=2
+maxRecordsInMemory=1000000
+tempDir=/home/supun/dev/projects/dsspidal/teragen/64/tmp
 p=320
-opts="-XX:+UseG1GC -Xms12G -Xmx12G"
+opts="-XX:+UseG1GC -Xms1G -Xmx2G"
 #$BUILD/bin/mpirun --report-bindings --mca btl tcp,sm,self --mca btl_tcp_if_include eth1 --mca coll_tuned_use_dynamic_rules 1  --mca coll_tuned_gather_algorithm 1  -np $p --hostfile nodes.txt java $opts -cp ../target/$jar edu.iu.dsc.terasort.Program -input $input -output $output -partitionSampleNodes $partitionSampleNodes -partitionSamplesPerNode $partitionSamplesPerNode -filePrefix $filePrefix -sendBufferSize $sendBufferSize 2>&1 | tee $summary
-time $BUILD/bin/mpirun -np $p --mca btl openib,sm,self --hostfile nodes.txt java $opts -cp $jar edu.iu.dsc.terasort.Program6 -input $input -output $output -partitionSampleNodes $partitionSampleNodes -partitionSamplesPerNode $partitionSamplesPerNode -filePrefix $filePrefix -sendBufferSize $sendBufferSize -filesPerProcess $filesPerProcess 2>&1 | tee $summary
+time $BUILD/bin/mpirun -np $p --mca btl openib,sm,self --hostfile nodes.txt java $opts -cp $jar edu.iu.dsc.terasort.Program6 -input $input -output $output -partitionSampleNodes $partitionSampleNodes -partitionSamplesPerNode $partitionSamplesPerNode -filePrefix $filePrefix -sendBufferSize $sendBufferSize -filesPerProcess $filesPerProcess -maxRecordsInMemory $maxRecordsInMemory -tempDir $tempDir 2>&1 | tee $summary

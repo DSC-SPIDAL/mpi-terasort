@@ -19,6 +19,8 @@ public class Program6 {
   private String inputFolder;
   private String filePrefix;
   private String outputFolder;
+  private String tmpFolder;
+  private int maxRecordsInMemory;
 
   private int partitionSampleNodes;
   private int partitionSamplesPerNode;
@@ -58,6 +60,8 @@ public class Program6 {
     options.addOption("filePrefix", true, "Prefix of the file partition");
     options.addOption("sendBufferSize", true, "Send buffer size for shuffling");
     options.addOption("filesPerProcess", true, "Files per process");
+    options.addOption("maxRecordsInMemory", true, "Max rocords to keep in memory in sorter");
+    options.addOption("tempDir", true, "Temporary directory");
 
     CommandLineParser commandLineParser = new GnuParser();
     CommandLine cmd = null;
@@ -70,6 +74,8 @@ public class Program6 {
       filePrefix = cmd.getOptionValue("filePrefix");
       maxSendRecords = Integer.parseInt(cmd.getOptionValue("sendBufferSize"));
       filesPerProcess = Integer.parseInt(cmd.getOptionValue("filesPerProcess"));
+      maxRecordsInMemory = Integer.parseInt(cmd.getOptionValue("maxRecordsInMemory"));
+      tmpFolder = cmd.getOptionValue("tempDir");
     } catch (ParseException e) {
       LOG.log(Level.SEVERE, "Failed to read the options", e);
       HelpFormatter formatter = new HelpFormatter();
@@ -83,13 +89,13 @@ public class Program6 {
     rank = MPI.COMM_WORLD.getRank();
     worldSize = MPI.COMM_WORLD.getSize();
     localRank = Integer.parseInt(System.getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
+//    localRank = 0;
     LOG.info("Local rank: " + localRank);
-    MergeSorter sorter = new MergeSorter(rank);
+    FSMergeSorter sorter = new FSMergeSorter(rank, maxRecordsInMemory, outputFolder, tmpFolder);
     long readTime = 0;
     long partitionTime = 0;
     long shuffleTime = 0;
     long sortTime = 0;
-    DataLoader loader = new DataLoader();
     PartitionTree partitionTree = null;
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
     for (int procFileNo = 0; procFileNo < filesPerProcess; procFileNo++) {
@@ -101,7 +107,7 @@ public class Program6 {
 
       long readStartTime = System.currentTimeMillis();
       String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank) + "_" + procFileNo).toString();
-      byte[] records = loader.loadArray(rank, inputFile);
+      byte[] records = DataLoader.loadArray(rank, inputFile);
       MPI.COMM_WORLD.barrier();
       long readEndTime = System.currentTimeMillis();
       readTime += readEndTime - readStartTime;
@@ -159,7 +165,7 @@ public class Program6 {
             int count = receiceStatus.getCount(MPI.BYTE);
             MPI.COMM_WORLD.recv(receiveBuffer, count, MPI.BYTE, receivingRank, 100);
             receiveComplete = true;
-            sorter.addData(receiveBuffer, count);
+            sorter.add(receiveBuffer, count);
             receiveBuffer.rewind();
           }
           Status sendStatus = sendRequest.testStatus();
@@ -182,20 +188,21 @@ public class Program6 {
         receiveBuffer.put(records, recordPosition * Record.RECORD_LENGTH, Record.RECORD_LENGTH);
       }
       receiveBuffer.rewind();
-      sorter.addData(receiveBuffer, ownPartitions.size() * Record.RECORD_LENGTH);
+      sorter.add(receiveBuffer, ownPartitions.size() * Record.RECORD_LENGTH);
       MPI.COMM_WORLD.barrier();
       long dataShuffleEndTime = System.currentTimeMillis();
-      shuffleTime += datShuffleStartTime - dataShuffleEndTime;
+      shuffleTime += dataShuffleEndTime - datShuffleStartTime;
 
       long sortingTime = System.currentTimeMillis();
       MPI.COMM_WORLD.barrier();
       long sortingEndTime = System.currentTimeMillis();
       sortTime += sortingEndTime - sortingTime;
     }
+    // indicate we are done receiving
+    sorter.doneReceive();
 
-    Record[] sortedRecords = sorter.sort();
     long saveTime = System.currentTimeMillis();
-    loader.saveFast(sortedRecords, outputFile);
+    sorter.merge();
     MPI.COMM_WORLD.barrier();
     long saveEndTime = System.currentTimeMillis();
 
