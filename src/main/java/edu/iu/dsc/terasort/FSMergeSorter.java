@@ -2,11 +2,10 @@ package edu.iu.dsc.terasort;
 
 import edu.iu.dsc.terasort.heap.Heap;
 import edu.iu.dsc.terasort.heap.HeapNode;
-import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo;
+import mpi.DoubleInt;
 import org.apache.hadoop.io.Text;
 
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Paths;
@@ -42,10 +41,15 @@ public class FSMergeSorter {
   private class OpenFile {
     FileChannel rwChannel;
     ByteBuffer os;
+    DataInputStream stream;
 
     public OpenFile(FileChannel rwChannel, ByteBuffer os) {
       this.rwChannel = rwChannel;
       this.os = os;
+    }
+
+    public OpenFile(DataInputStream stream) {
+      this.stream = stream;
     }
   }
 
@@ -140,7 +144,7 @@ public class FSMergeSorter {
         int fileSize = savedFileSizes.get(i - 1);
         int sizeToRead = currentRead + readSize > fileSize ? fileSize - currentRead : readSize;
 //        LOG.info(String.format("Rank %d From %d Size to read %d currentRead %d fileSize %d", rank, i - 1, sizeToRead, currentRead, fileSize));
-        A[i] = read(fileParts.get(i - 1), sizeToRead);
+        A[i] = readStream(fileParts.get(i - 1), sizeToRead);
         currentRead += sizeToRead;
         currentReadSizes.put(i - 1, currentRead);
       }
@@ -180,7 +184,7 @@ public class FSMergeSorter {
             int sizeToRead = currentRead + readSize > fileSize ? fileSize - currentRead : readSize;
 //            LOG.info(String.format("Rank %d SizeToRead %d currentRead %d fileSize %d readSize %d count %d totalToSave %d ptrs[h.listNo] %d A[h.listNo].length %d", rank, sizeToRead, currentRead, fileSize, readSize, count, totalToSave, ptrs[h.listNo], A[h.listNo].length));
             if (sizeToRead > 0) {
-              A[h.listNo] = read(fileParts.get(i - 1), sizeToRead);
+              A[h.listNo] = readStream(fileParts.get(i - 1), sizeToRead);
               ptrs[h.listNo] = 0;
               heap.insert(A[h.listNo][ptrs[h.listNo]], h.listNo);
               // ptrs[h.listNo]++;
@@ -205,7 +209,12 @@ public class FSMergeSorter {
     } finally {
       for (OpenFile f : fileParts.values()) {
         try {
-          f.rwChannel.close();
+          if (f.rwChannel != null) {
+            f.rwChannel.close();
+          }
+          if (f.stream != null) {
+            f.stream.close();
+          }
         } catch (IOException e) {
           e.printStackTrace();
         }
@@ -215,7 +224,7 @@ public class FSMergeSorter {
 
   private void openSavedFiles() {
     for (int i = 0; i < saveIndex; i++) {
-      fileParts.put(i, openSavedPart(i, savedFileSizes.get(i) * Record.RECORD_LENGTH));
+      fileParts.put(i, openStreamFile(i, savedFileSizes.get(i) * Record.RECORD_LENGTH));
     }
   }
 
@@ -332,6 +341,32 @@ public class FSMergeSorter {
     return r;
   }
 
+  private int read(byte[] buf, int size, DataInputStream stream) {
+    int readSize = 0;
+    while (readSize < size) {
+      try {
+        readSize = stream.read(buf, readSize, size - readSize);
+        if (readSize < 0) {
+          throw new RuntimeException("Failed to read");
+        }
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return readSize;
+  }
+
+  private Record[] readStream(OpenFile file, int size) {
+    Record[] r = new Record[size];
+    DataInputStream stream = file.stream;
+    for (int i = 0; i < size; i++) {
+      read(key, Record.KEY_SIZE, stream);
+      read(text, Record.DATA_SIZE, stream);
+      r[i] = new Record(new Text(key), new Text(text));
+    }
+    return r;
+  }
+
   private OpenFile openSavedPart(int part, long length) {
     String outFileName = Paths.get(cacheFolder, rank + "_" + part).toString();
     FileChannel rwChannel = null;
@@ -339,6 +374,18 @@ public class FSMergeSorter {
       rwChannel = new RandomAccessFile(outFileName, "rw").getChannel();
       ByteBuffer os = rwChannel.map(FileChannel.MapMode.READ_ONLY, 0, length);
       return new OpenFile(rwChannel, os);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private OpenFile openStreamFile(int part, long length) {
+    String outFileName = Paths.get(cacheFolder, rank + "_" + part).toString();
+    try {
+      DataInputStream stream = new DataInputStream(
+          new BufferedInputStream(
+              new FileInputStream(new File(outFileName))));
+      return new OpenFile(stream);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
