@@ -98,6 +98,8 @@ public class Program6 {
     long sortTime = 0;
     PartitionTree partitionTree = null;
     String outputFile = Paths.get(outputFolder, filePrefix + Integer.toString(rank)).toString();
+    ByteBuffer sendBuffer = null;
+    ByteBuffer receiveBuffer = null;
     for (int procFileNo = 0; procFileNo < filesPerProcess; procFileNo++) {
       // create the partitioned record list
       Map<Integer, List<Integer>> partitionedRecords = new HashMap<Integer, List<Integer>>();
@@ -134,9 +136,11 @@ public class Program6 {
       long partitionEndTime = System.currentTimeMillis();
       partitionTime += partitionEndTime - partitionStartTime;
 
+      if (sendBuffer == null) {
+        sendBuffer = MPI.newByteBuffer(records.length * 4 / worldSize);
+        receiveBuffer = MPI.newByteBuffer(records.length * 4 / worldSize);
+      }
       // lets assume this is enough
-      ByteBuffer sendBuffer = MPI.newByteBuffer(records.length * 4 / worldSize);
-      ByteBuffer receiveBuffer = MPI.newByteBuffer(records.length * 4 / worldSize);
       // go through each partition
       long datShuffleStartTime = System.currentTimeMillis();
       for (int i = 1; i < worldSize; i++) {
