@@ -144,7 +144,7 @@ public class FSMergeSorter {
         int fileSize = savedFileSizes.get(i - 1);
         int sizeToRead = currentRead + readSize > fileSize ? fileSize - currentRead : readSize;
 //        LOG.info(String.format("Rank %d From %d Size to read %d currentRead %d fileSize %d", rank, i - 1, sizeToRead, currentRead, fileSize));
-        A[i] = readStream(fileParts.get(i - 1), sizeToRead);
+        A[i] = read(fileParts.get(i - 1), sizeToRead);
         currentRead += sizeToRead;
         currentReadSizes.put(i - 1, currentRead);
       }
@@ -184,7 +184,7 @@ public class FSMergeSorter {
             int sizeToRead = currentRead + readSize > fileSize ? fileSize - currentRead : readSize;
 //            LOG.info(String.format("Rank %d SizeToRead %d currentRead %d fileSize %d readSize %d count %d totalToSave %d ptrs[h.listNo] %d A[h.listNo].length %d", rank, sizeToRead, currentRead, fileSize, readSize, count, totalToSave, ptrs[h.listNo], A[h.listNo].length));
             if (sizeToRead > 0) {
-              A[h.listNo] = readStream(fileParts.get(i - 1), sizeToRead);
+              A[h.listNo] = read(fileParts.get(i - 1), sizeToRead);
               ptrs[h.listNo] = 0;
               heap.insert(A[h.listNo][ptrs[h.listNo]], h.listNo);
               // ptrs[h.listNo]++;
@@ -224,7 +224,7 @@ public class FSMergeSorter {
 
   private void openSavedFiles() {
     for (int i = 0; i < saveIndex; i++) {
-      fileParts.put(i, openStreamFile(i, savedFileSizes.get(i) * Record.RECORD_LENGTH));
+      fileParts.put(i, openSavedPart(i, savedFileSizes.get(i) * Record.RECORD_LENGTH));
     }
   }
 
