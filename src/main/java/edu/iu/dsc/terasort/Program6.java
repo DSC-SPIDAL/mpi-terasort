@@ -216,7 +216,7 @@ public class Program6 {
             LOG.info("Read time: " + (readTime));
             LOG.info("Partition time: " + (partitionTime));
             LOG.info("Shuffle time: " + (shuffleTime));
-            LOG.info("Sort time: " + (saveEndTime - saveTime) + sortTimeinner);
+            LOG.info("Sort time: " + ((saveEndTime - saveTime) + sortTimeinner));
 //      LOG.info("Save time: " + (saveEndTime - saveTime));
         }
     }
