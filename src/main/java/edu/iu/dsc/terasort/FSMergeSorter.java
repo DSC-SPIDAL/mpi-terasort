@@ -3,7 +3,9 @@ package edu.iu.dsc.terasort;
 import edu.iu.dsc.terasort.heap.Heap;
 import edu.iu.dsc.terasort.heap.HeapNode;
 import mpi.DoubleInt;
+import org.apache.commons.configuration.SystemConfiguration;
 import org.apache.hadoop.io.Text;
+import org.apache.log4j.net.SyslogAppender;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -28,6 +30,7 @@ public class FSMergeSorter {
   private volatile List<Record[]> recordsList = new ArrayList<>();
   private long currentRecordsInMemory = 0;
   private int saveIndex = 0;
+  private long sortTime = 0;
   private SortWorker sortWorker;
   private Thread sortWorkerThread;
   private String cacheFolder;
@@ -97,7 +100,7 @@ public class FSMergeSorter {
     LOG.info(String.format("Rank %d Stopped receiving", rank));
   }
 
-  public void merge() {
+  public long merge() {
     // merge the remaiing lists
     Record[][] records = new Record[recordsList.size()][];
     for (int i = 0; i < recordsList.size(); i++) {
@@ -220,6 +223,7 @@ public class FSMergeSorter {
         }
       }
     }
+    return sortTime;
   }
 
   private void openSavedFiles() {
@@ -277,6 +281,7 @@ public class FSMergeSorter {
 //        LOG.info(String.format("rank %d max records %d current records %d", rank, maxRecordsInMemory, currentRecordsInMemory));
         if  (currentRecordsInMemory >= maxRecordsInMemory) {
           // now save to disk
+          long stime = System.currentTimeMillis();
           List<Record[]> list;
           lock.lock();
           try {
@@ -299,6 +304,7 @@ public class FSMergeSorter {
           saveFile(save, save.length, outFileName);
           savedFileSizes.put(saveIndex, save.length);
           saveIndex++;
+          sortTime += System.currentTimeMillis() - stime;
         } else {
           lock.lock();
           try {
