@@ -108,7 +108,7 @@ public class Program6 {
             }
 
             long readStartTime = System.currentTimeMillis();
-            String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank - 1) + "_" + procFileNo).toString();
+            String inputFile = Paths.get(inputFolder, filePrefix + Integer.toString(localRank) + "_" + procFileNo).toString();
             byte[] records = DataLoader.loadArray(rank, inputFile);
             MPI.COMM_WORLD.barrier();
             long readEndTime = System.currentTimeMillis();
